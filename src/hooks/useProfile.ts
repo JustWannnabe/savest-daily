@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTransactions } from "./useTransactions";
 import { useMemo } from "react";
+import { istDayKey, istTodayKey } from "@/lib/format";
 
 export type Profile = {
   id: string;
@@ -45,20 +46,19 @@ export function useSavingsStreak() {
 
     const byDay = new Map<string, number>();
     for (const t of expenses) {
-      const d = new Date(t.occurred_at);
-      const key = d.toISOString().slice(0, 10);
+      const key = istDayKey(t.occurred_at);
       byDay.set(key, (byDay.get(key) ?? 0) + t.amount);
     }
     const avg = [...byDay.values()].reduce((a, b) => a + b, 0) / byDay.size;
 
     let streak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    // start from today; if today has no entry, start from yesterday
+    const todayKey = istTodayKey();
+    const baseDate = new Date(`${todayKey}T00:00:00+05:30`);
+    // start from today (IST); if today has no entry, start from yesterday
     for (let i = 0; i < 60; i++) {
-      const d = new Date(today);
+      const d = new Date(baseDate);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = istDayKey(d);
       const spent = byDay.get(key);
       if (spent === undefined) {
         if (i === 0) continue; // grace day
