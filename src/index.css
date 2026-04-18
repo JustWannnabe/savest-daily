@@ -154,6 +154,24 @@
   .gradient-balance-negative {
     background: linear-gradient(135deg, hsl(0 65% 28%), hsl(0 72% 18%));
   }
+  /* Dark-mode glassmorphic negative state — low-opacity black/red mix, vibrant red border, soft outer glow */
+  .dark .gradient-balance-negative {
+    background:
+      linear-gradient(135deg, hsl(0 80% 14% / 0.55), hsl(0 0% 0% / 0.65));
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 2px solid #FF4D4D;
+    box-shadow:
+      0 0 0 1px hsl(0 100% 65% / 0.15),
+      0 12px 40px -8px hsl(0 100% 60% / 0.45),
+      0 0 60px -10px hsl(0 100% 60% / 0.35);
+    animation: pulse-red-border 2.6s ease-in-out infinite;
+  }
+  /* Budget ring red-glow halo (dark mode, when over income) */
+  .dark .ring-glow-danger {
+    filter: drop-shadow(0 0 12px hsl(0 100% 60% / 0.55))
+            drop-shadow(0 0 24px hsl(0 100% 60% / 0.25));
+  }
   .scanline {
     background: linear-gradient(180deg,
       transparent 0%,
@@ -183,3 +201,20 @@
 .dot-1 { animation: pulse-dot 1.2s infinite; }
 .dot-2 { animation: pulse-dot 1.2s infinite 0.15s; }
 .dot-3 { animation: pulse-dot 1.2s infinite 0.3s; }
+
+@keyframes pulse-red-border {
+  0%, 100% {
+    border-color: #FF4D4D;
+    box-shadow:
+      0 0 0 1px hsl(0 100% 65% / 0.15),
+      0 12px 40px -8px hsl(0 100% 60% / 0.45),
+      0 0 60px -10px hsl(0 100% 60% / 0.35);
+  }
+  50% {
+    border-color: hsl(0 100% 72%);
+    box-shadow:
+      0 0 0 2px hsl(0 100% 65% / 0.30),
+      0 12px 56px -6px hsl(0 100% 60% / 0.65),
+      0 0 90px -8px hsl(0 100% 60% / 0.55);
+  }
+}
