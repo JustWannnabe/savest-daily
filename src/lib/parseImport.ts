@@ -109,53 +109,82 @@ export async function parseCsv(file: File): Promise<ParsedRow[]> {
 /* ------------------------------------------------------------------ */
 /*  OCR extractor — pulls amounts + nearby merchant from raw text      */
 /* ------------------------------------------------------------------ */
+/** Aggressive deep-scan: finds prices on each line OR pairs a name-line
+ *  with the next line's price when the name has no number of its own.    */
 export function extractFromOcrText(text: string): ParsedRow[] {
   if (!text || text.trim().length < 4) return [];
-  // Normalize
   const normalized = text.replace(/\r/g, "");
   const lines = normalized
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  // Currency-anchored amount regex: ₹ or Rs followed by a number, OR a number with 2 decimals
-  const amountRe = /(?:₹|Rs\.?|INR)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|\b([0-9]{2,}(?:,[0-9]{3})*\.[0-9]{2})\b/gi;
+  // Drop obvious receipt boilerplate from merchant guesses
+  const NOISE = /^(sub\s*total|subtotal|total|grand\s*total|amount|tax|gst|cgst|sgst|igst|cash|change|tendered|balance|round|rounding|net|invoice|bill|receipt|date|time|table|order|qty|item|description|thank|thanks|visit again|customer|served by|cashier)\b/i;
+  const isNoise = (s: string) => NOISE.test(s);
+
+  // Currency-anchored OR a bare number with decimals (e.g., 240.00 or 1,250.50)
+  const amountReGlobal = /(?:₹|Rs\.?|INR)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\b|\b([0-9]{2,5}\.[0-9]{2})\b/gi;
+  const amountReSingle = /^(?:₹|Rs\.?|INR)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*$/i;
 
   type Hit = { amount: number; merchant: string };
   const hits: Hit[] = [];
   const seen = new Set<string>();
 
+  const pushHit = (amount: number, merchantSrc: string) => {
+    if (!amount || amount < 5 || amount > 500000) return;
+    let src = merchantSrc.replace(/[:\-|•·]+/g, " ").trim();
+    if (src.length < 3 || isNoise(src)) src = "Receipt item";
+    const merchant = cleanMerchant(src) ?? "Receipt item";
+    const key = `${merchant.toLowerCase()}|${amount}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push({ amount, merchant });
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // Case A: line contains both a name and one or more prices
     let m: RegExpExecArray | null;
-    amountRe.lastIndex = 0;
-    while ((m = amountRe.exec(line))) {
-      const raw = m[1] ?? m[2];
+    amountReGlobal.lastIndex = 0;
+    let foundOnLine = false;
+    while ((m = amountReGlobal.exec(line))) {
+      const raw = m[1] ?? m[2] ?? m[3];
       const amt = parseAmount(raw);
-      if (!amt || amt < 5 || amt > 500000) continue;
-      // Merchant guess: use a non-numeric line above (or the same line minus the amount)
-      let merchantSrc = line.replace(m[0], "").replace(/[:\-|]+/g, " ").trim();
+      if (!amt) continue;
+      foundOnLine = true;
+      let merchantSrc = line.replace(m[0], "").trim();
       if (merchantSrc.length < 3) {
+        // climb up to 3 lines for a non-numeric, non-noise label
         for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
-          if (!/\d/.test(lines[j]) && lines[j].length >= 3) { merchantSrc = lines[j]; break; }
+          if (!/\d/.test(lines[j]) && !isNoise(lines[j]) && lines[j].length >= 3) {
+            merchantSrc = lines[j];
+            break;
+          }
         }
       }
-      if (merchantSrc.length < 3) merchantSrc = "Receipt item";
-      const merchant = cleanMerchant(merchantSrc) ?? "Receipt item";
-      const key = `${merchant.toLowerCase()}|${amt}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      hits.push({ amount: amt, merchant });
+      pushHit(amt, merchantSrc);
+    }
+
+    // Case B: line is a name (no digits) and the NEXT line is a bare price
+    if (!foundOnLine && !/\d/.test(line) && !isNoise(line) && line.length >= 3) {
+      const next = lines[i + 1];
+      if (next) {
+        const single = next.match(amountReSingle);
+        if (single) {
+          const amt = parseAmount(single[1]);
+          if (amt) pushHit(amt, line);
+        }
+      }
     }
   }
 
-  // Try to detect a date anywhere in the text
   const dateMatch = normalized.match(/\b(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})\b/);
   const occurred_at = dateMatch ? parseDate(dateMatch[1]) : new Date().toISOString();
 
-  // Prefer larger / more "total"-like amounts first (cap to top 8 to keep UI tidy)
-  hits.sort((a, b) => b.amount - a.amount);
-  const top = hits.slice(0, 8);
+  // Keep ALL hits in detection order (no longer sorted by amount), capped at 20
+  const top = hits.slice(0, 20);
 
   return top.map((h) => {
     const { category, sub } = guessCategory(h.merchant);
