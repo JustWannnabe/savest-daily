@@ -201,3 +201,20 @@
 .dot-1 { animation: pulse-dot 1.2s infinite; }
 .dot-2 { animation: pulse-dot 1.2s infinite 0.15s; }
 .dot-3 { animation: pulse-dot 1.2s infinite 0.3s; }
+
+@keyframes pulse-red-border {
+  0%, 100% {
+    border-color: #FF4D4D;
+    box-shadow:
+      0 0 0 1px hsl(0 100% 65% / 0.15),
+      0 12px 40px -8px hsl(0 100% 60% / 0.45),
+      0 0 60px -10px hsl(0 100% 60% / 0.35);
+  }
+  50% {
+    border-color: hsl(0 100% 72%);
+    box-shadow:
+      0 0 0 2px hsl(0 100% 65% / 0.30),
+      0 12px 56px -6px hsl(0 100% 60% / 0.65),
+      0 0 90px -8px hsl(0 100% 60% / 0.55);
+  }
+}
