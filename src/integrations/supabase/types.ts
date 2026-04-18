@@ -14,7 +14,105 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alert_dismissals: {
+        Row: {
+          alert_key: string
+          dismissed_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          alert_key: string
+          dismissed_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          alert_key?: string
+          dismissed_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          currency: string
+          display_name: string | null
+          id: string
+          last_active_date: string | null
+          streak_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          currency?: string
+          display_name?: string | null
+          id?: string
+          last_active_date?: string | null
+          streak_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          currency?: string
+          display_name?: string | null
+          id?: string
+          last_active_date?: string | null
+          streak_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          id: string
+          is_subscription: boolean
+          merchant: string | null
+          note: string | null
+          occurred_at: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          id?: string
+          is_subscription?: boolean
+          merchant?: string | null
+          note?: string | null
+          occurred_at?: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          id?: string
+          is_subscription?: boolean
+          merchant?: string | null
+          note?: string | null
+          occurred_at?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
