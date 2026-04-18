@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Alerts from "./pages/Alerts";
 import Analytics from "./pages/Analytics";
+import Grow from "./pages/Grow";
 import Mentor from "./pages/Mentor";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
               <Route path="/alerts" element={<Protected><Alerts /></Protected>} />
               <Route path="/analytics" element={<Protected><Analytics /></Protected>} />
+              <Route path="/grow" element={<Protected><Grow /></Protected>} />
               <Route path="/mentor" element={<Protected><Mentor /></Protected>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
