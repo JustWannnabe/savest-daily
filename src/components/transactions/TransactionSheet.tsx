@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import {
   useAddTransaction,
   useUpdateTransaction,
@@ -30,7 +30,7 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
   const add = useAddTransaction();
   const update = useUpdateTransaction();
   const { data: existing = [] } = useTransactions();
-  const { customCategories, addCustom, isCustom } = useCustomCategories();
+  const { customCategories, addCustom, removeCustom, isCustom } = useCustomCategories();
 
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
@@ -44,8 +44,8 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
   const [customMode, setCustomMode] = useState(false);
   const [customName, setCustomName] = useState("");
 
-  // Duplicate shield
-  const [pendingDuplicate, setPendingDuplicate] = useState<Transaction | null>(null);
+  // Duplicate shield — capture the resolved category so we don't lose state
+  const [pendingDuplicate, setPendingDuplicate] = useState<{ tx: Transaction; category: string } | null>(null);
 
   useEffect(() => {
     if (editing) {
@@ -69,9 +69,10 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
     setCustomName("");
   }, [editing, open]);
 
-  const persist = async () => {
+  /** Persist with an explicit category so we never read stale React state. */
+  const persist = async (resolvedCategory: string) => {
     const amt = parseFloat(amount);
-    const finalCategory = type === "income" ? "Income" : category;
+    const finalCategory = type === "income" ? "Income" : resolvedCategory;
     const payload = {
       type,
       amount: amt,
@@ -100,26 +101,31 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return toast.error("Enter a valid amount");
 
-    // Save custom category if user typed one
-    if (customMode) {
+    // Resolve the category synchronously, BEFORE we call persist().
+    // (Bug fix: previously we relied on setCategory() async update, which
+    // caused new transactions to fall back to "Food & Drink".)
+    let resolvedCategory = category;
+    if (type === "expense" && customMode) {
       const saved = addCustom(customName);
       if (!saved) return toast.error("Enter a category name");
+      resolvedCategory = saved;
       setCategory(saved);
       setCustomMode(false);
+      setCustomName("");
     }
 
     // Skip duplicate check when editing the same row
     if (!editing) {
       const dup = findRecentDuplicate(
-        { amount: amt, category: type === "income" ? "Income" : (customMode ? customName.trim() : category), type },
+        { amount: amt, category: type === "income" ? "Income" : resolvedCategory, type },
         existing
       );
       if (dup) {
-        setPendingDuplicate(dup);
+        setPendingDuplicate({ tx: dup, category: resolvedCategory });
         return;
       }
     }
-    await persist();
+    await persist(resolvedCategory);
   };
 
   const handleCategoryChange = (v: string) => {
@@ -129,6 +135,16 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
     }
     setCustomMode(false);
     setCategory(v);
+  };
+
+  const handleDeleteCustom = (e: React.MouseEvent, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    removeCustom(name);
+    if (category === name) setCategory("Other");
+    toast.success(`Removed "${name}"`, {
+      description: "Existing transactions keep their label.",
+    });
   };
 
   return (
@@ -188,10 +204,19 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
                       ))}
                       {customCategories.length > 0 && <SelectSeparator />}
                       {customCategories.map((c) => (
-                        <SelectItem key={c} value={c}>
+                        <SelectItem key={c} value={c} className="pr-9">
                           <span className="inline-flex items-center gap-1.5">
                             <Sparkles className="h-3 w-3 text-accent" /> {c}
                           </span>
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => handleDeleteCustom(e, c)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            aria-label={`Delete ${c}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </SelectItem>
                       ))}
                       <SelectSeparator />
@@ -237,10 +262,11 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
       <DuplicateShieldDialog
         open={!!pendingDuplicate}
         onOpenChange={(o) => !o && setPendingDuplicate(null)}
-        duplicate={pendingDuplicate}
+        duplicate={pendingDuplicate?.tx ?? null}
         onConfirm={async () => {
+          const cat = pendingDuplicate?.category ?? category;
           setPendingDuplicate(null);
-          await persist();
+          await persist(cat);
         }}
       />
     </>

@@ -1,3 +1,7 @@
+// All date/time formatting + math is locked to Asia/Kolkata (IST)
+// to keep streak calculations and UI consistent for Indian users.
+export const APP_TZ = "Asia/Kolkata";
+
 export const formatINR = (n: number, opts: { compact?: boolean } = {}) => {
   const v = Number.isFinite(n) ? n : 0;
   if (opts.compact && Math.abs(v) >= 100000) {
@@ -15,15 +19,50 @@ export const formatINR = (n: number, opts: { compact?: boolean } = {}) => {
   }).format(v);
 };
 
+/** Short month/day in IST e.g. "18 Apr". */
 export const formatDate = (d: string | Date) => {
   const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return date.toLocaleDateString("en-IN", {
+    timeZone: APP_TZ,
+    day: "numeric",
+    month: "short",
+  });
+};
+
+/** Full date e.g. "18 Apr 2026" — preferred default for the UI. */
+export const formatDateLong = (d: string | Date) => {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("en-IN", {
+    timeZone: APP_TZ,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
 export const formatDateTime = (d: string | Date) => {
   const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  return date.toLocaleString("en-IN", {
+    timeZone: APP_TZ,
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 };
+
+/**
+ * Returns YYYY-MM-DD string for the given Date as seen in IST.
+ * Used for grouping transactions/streaks by "day" without timezone drift.
+ */
+export const istDayKey = (d: Date | string): string => {
+  const date = typeof d === "string" ? new Date(d) : d;
+  // en-CA gives ISO-like YYYY-MM-DD output
+  return date.toLocaleDateString("en-CA", { timeZone: APP_TZ });
+};
+
+/** Today's IST day key. */
+export const istTodayKey = () => istDayKey(new Date());
 
 export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 export const daysAgo = (n: number) => {

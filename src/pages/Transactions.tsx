@@ -71,7 +71,13 @@ export default function Transactions() {
   const grouped = useMemo(() => {
     const m = new Map<string, Transaction[]>();
     for (const t of filtered) {
-      const key = new Date(t.occurred_at).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
+      const key = new Date(t.occurred_at).toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
       const arr = m.get(key) ?? [];
       arr.push(t);
       m.set(key, arr);

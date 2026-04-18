@@ -14,6 +14,11 @@ const read = (): string[] => {
   }
 };
 
+const write = (next: string[]) => {
+  localStorage.setItem(KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event("moneyflow:categories-changed"));
+};
+
 /** Custom categories are persisted in localStorage and broadcast across the app. */
 export function useCustomCategories() {
   const [custom, setCustom] = useState<string[]>(read);
@@ -39,10 +44,15 @@ export function useCustomCategories() {
       read().some((c) => c.toLowerCase() === clean.toLowerCase());
     if (exists) return clean;
     const next = [...read(), clean];
-    localStorage.setItem(KEY, JSON.stringify(next));
+    write(next);
     setCustom(next);
-    window.dispatchEvent(new Event("moneyflow:categories-changed"));
     return clean;
+  }, []);
+
+  const removeCustom = useCallback((name: string) => {
+    const next = read().filter((c) => c.toLowerCase() !== name.toLowerCase());
+    write(next);
+    setCustom(next);
   }, []);
 
   const isCustom = useCallback(
@@ -55,6 +65,7 @@ export function useCustomCategories() {
     customCategories: custom,
     allCategories: [...CATEGORIES, ...custom] as string[],
     addCustom,
+    removeCustom,
     isCustom,
   };
 }

@@ -4,7 +4,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan, Sparkles, ShieldAlert } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan, Sparkles, ShieldAlert, CheckCircle2 } from "lucide-react";
 import {
   useTransactions,
   useAddTransactionsBulk,
@@ -13,7 +15,8 @@ import {
 } from "@/hooks/useTransactions";
 import { useCustomCategories } from "@/hooks/useCustomCategories";
 import { findRecentDuplicate } from "@/lib/duplicates";
-import { formatINR } from "@/lib/format";
+import { formatINR, formatDateLong } from "@/lib/format";
+import { CATEGORIES } from "@/lib/categories";
 import { parseCsv, extractFromOcrText, type ParsedRow } from "@/lib/parseImport";
 import { toast } from "sonner";
 
@@ -36,7 +39,6 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
   const { data: existing = [] } = useTransactions();
   const { isCustom } = useCustomCategories();
   const bulk = useAddTransactionsBulk();
-  const addOne = useAddTransaction();
 
   const reset = () => {
     setFile(null);
@@ -134,17 +136,19 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
   };
 
   const importNow = async () => {
-    const selected = rows.filter((r) => r._checked);
-    if (!selected.length) return toast.error("Select at least one row");
+    const selected = rows.filter((r) => r._checked && r.amount > 0);
+    if (!selected.length) return toast.error("Select at least one valid row");
 
     const dupes = selected.filter((r) => r._duplicate);
     const cleanInsert = async () => {
-      const payload: NewTransaction[] = selected.map(({ _checked, _duplicate, _source, ...rest }) => rest);
+      const payload: NewTransaction[] = selected.map(
+        ({ _checked, _duplicate, _source, ...rest }) => rest
+      );
       try {
-        // If there's a single row and it's a duplicate the user explicitly toggled on,
-        // we already showed the badge — so just insert.
         await bulk.mutateAsync(payload);
-        toast.success(`Imported ${payload.length} transaction${payload.length === 1 ? "" : "s"}`);
+        toast.success(`Imported ${payload.length} transaction${payload.length === 1 ? "" : "s"}`, {
+          description: "Now visible on Dashboard & Transactions.",
+        });
         onOpenChange(false);
         reset();
       } catch (e: any) {
@@ -153,7 +157,6 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
     };
 
     if (dupes.length > 0) {
-      // Lightweight inline confirmation via window.confirm equivalent — use toast with action
       toast.warning(
         `${dupes.length} possible duplicate${dupes.length === 1 ? "" : "s"} selected`,
         {
@@ -250,8 +253,9 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
         {stage === "review" && (
           <div className="mt-2">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs text-muted-foreground">
-                {rows.filter((r) => r._checked).length} of {rows.length} selected
+              <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                Review {rows.length} detected · {rows.filter((r) => r._checked).length} selected
               </div>
               {rows.some((r) => r._duplicate) && (
                 <div className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-warning/15 text-warning font-semibold inline-flex items-center gap-1">
@@ -259,15 +263,15 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
                 </div>
               )}
             </div>
-            <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+
+            {/* Review table — verify amount + category before committing */}
+            <div className="max-h-80 overflow-y-auto rounded-2xl border border-border divide-y divide-border">
               {rows.map((r, i) => (
-                <label
+                <div
                   key={i}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                    r._duplicate
-                      ? "border-warning/40 bg-warning/5 hover:bg-warning/10"
-                      : "border-border hover:bg-secondary/60"
-                  }`}
+                  className={`grid grid-cols-[auto_1fr_auto] gap-2 items-center p-3 transition-colors ${
+                    r._duplicate ? "bg-warning/5" : ""
+                  } ${!r._checked ? "opacity-50" : ""}`}
                 >
                   <Checkbox
                     checked={r._checked}
@@ -275,33 +279,68 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
                       setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, _checked: !!v } : row)))
                     }
                   />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate flex items-center gap-1.5">
-                      {r.merchant ?? r.category}
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-sm font-medium truncate">
+                      <span className="truncate">{r.merchant ?? "Unknown"}</span>
                       {isCustom(r.category) && (
-                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent/15 text-accent font-semibold inline-flex items-center gap-0.5">
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent/15 text-accent font-semibold inline-flex items-center gap-0.5 shrink-0">
                           <Sparkles className="h-2.5 w-2.5" /> Custom
                         </span>
                       )}
-                    </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <span>{r.category}</span>
-                      <span>·</span>
-                      <span>{new Date(r.occurred_at).toLocaleDateString("en-IN")}</span>
                       {r._duplicate && (
-                        <span className="text-warning font-medium">· duplicate of recent</span>
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-warning/15 text-warning font-semibold shrink-0">
+                          Duplicate
+                        </span>
                       )}
                     </div>
+                    <div className="flex gap-1.5">
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        value={r.amount}
+                        onChange={(e) =>
+                          setRows((prev) =>
+                            prev.map((row, idx) =>
+                              idx === i ? { ...row, amount: parseFloat(e.target.value) || 0 } : row
+                            )
+                          )
+                        }
+                        className="h-8 rounded-lg text-xs font-num w-24"
+                      />
+                      <Select
+                        value={r.category}
+                        onValueChange={(v) =>
+                          setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, category: v } : row)))
+                        }
+                      >
+                        <SelectTrigger className="h-8 rounded-lg text-xs flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground font-num">
+                      {formatDateLong(r.occurred_at)} · via {r._source.toUpperCase()}
+                    </div>
                   </div>
-                  <div className="font-num font-semibold text-sm">{formatINR(r.amount)}</div>
-                </label>
+                  <div className="font-num font-semibold text-sm text-right shrink-0">
+                    {formatINR(r.amount)}
+                  </div>
+                </div>
               ))}
             </div>
             <div className="flex gap-2 mt-4">
               <Button variant="outline" onClick={reset} className="flex-1 rounded-xl">Cancel</Button>
-              <Button onClick={importNow} disabled={bulk.isPending} className="flex-1 rounded-xl font-semibold">
+              <Button
+                onClick={importNow}
+                disabled={bulk.isPending || rows.filter((r) => r._checked).length === 0}
+                className="flex-1 rounded-xl font-semibold"
+              >
                 {bulk.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Import {rows.filter((r) => r._checked).length}
+                Confirm import ({rows.filter((r) => r._checked).length})
               </Button>
             </div>
           </div>
