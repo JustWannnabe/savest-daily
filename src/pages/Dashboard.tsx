@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useActiveAlerts } from "@/hooks/useAlerts";
+import { useSavingsStreak } from "@/hooks/useProfile";
 import { formatINR, formatDate } from "@/lib/format";
 import { Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
+import { BudgetRing } from "@/components/dashboard/BudgetRing";
+import { StreakCard } from "@/components/dashboard/StreakCard";
 import {
   PieChart,
   Pie,
@@ -18,9 +21,12 @@ import {
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { Link } from "react-router-dom";
 
+const MONTHLY_BUDGET = 12000;
+
 export default function Dashboard() {
   const { data: txs = [], isLoading } = useTransactions();
   const alerts = useActiveAlerts();
+  const streak = useSavingsStreak();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const monthTxs = useMemo(() => {
