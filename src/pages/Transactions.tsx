@@ -110,7 +110,7 @@ export default function Transactions() {
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
               <SelectItem value="expense">Expense</SelectItem>
-              <SelectItem value="income">Income</SelectItem>
+              <SelectItem value="income">Earning</SelectItem>
             </SelectContent>
           </Select>
           <Select value={cat} onValueChange={setCat}>

@@ -2,9 +2,21 @@ import { useMemo, useState } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useActiveAlerts } from "@/hooks/useAlerts";
 import { useSavingsStreak } from "@/hooks/useProfile";
+import { useMonthlyBudget } from "@/hooks/useMonthlyBudget";
 import { formatINR, formatDate } from "@/lib/format";
-import { Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp } from "lucide-react";
+import {
+  Plus,
+  ArrowUpRight,
+  ArrowDownLeft,
+  AlertTriangle,
+  TrendingUp,
+  Pencil,
+  Check,
+  X,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { BudgetRing } from "@/components/dashboard/BudgetRing";
 import { StreakCard } from "@/components/dashboard/StreakCard";
@@ -21,13 +33,16 @@ import {
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { Link } from "react-router-dom";
 
-const MONTHLY_BUDGET = 12000;
-
 export default function Dashboard() {
   const { data: txs = [], isLoading } = useTransactions();
   const alerts = useActiveAlerts();
   const streak = useSavingsStreak();
+  const { budget, setBudget, suggestFrom } = useMonthlyBudget();
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Budget editor state
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetDraft, setBudgetDraft] = useState("");
 
   const monthTxs = useMemo(() => {
     const now = new Date();
@@ -37,9 +52,9 @@ export default function Dashboard() {
     });
   }, [txs]);
 
-  const income = monthTxs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const earning = monthTxs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = monthTxs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const balance = income - expense;
+  const balance = earning - expense;
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
@@ -69,21 +84,25 @@ export default function Dashboard() {
   const isNegative = balance < 0;
   const overspentBy = isNegative ? Math.abs(balance) : 0;
 
-  // Saved this week (cap at 0 floor) — used by the Growth Opportunity card.
-  const savedThisWeek = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 86400000;
-    const recentIncome = txs
-      .filter((t) => t.type === "income" && new Date(t.occurred_at).getTime() >= weekAgo)
-      .reduce((s, t) => s + t.amount, 0);
-    const recentExpense = txs
-      .filter((t) => t.type === "expense" && new Date(t.occurred_at).getTime() >= weekAgo)
-      .reduce((s, t) => s + t.amount, 0);
-    return Math.max(0, recentIncome - recentExpense);
-  }, [txs]);
-  // Demo-friendly floor so the teaser always reads well.
-  const savedDisplay = Math.max(savedThisWeek, 500);
-  // Digital Gold projection — assume ~12% CAGR over 3 yrs, monthly compounding.
-  const projected3y = Math.round(savedDisplay * Math.pow(1 + 0.12 / 12, 36));
+  // Growth Opportunity is now driven by the user's CURRENT AVAILABLE BALANCE (positive only).
+  // Hinglish copy explicitly mentions Available Balance and 12% / 3-yr digital-gold projection.
+  const investable = Math.max(0, balance);
+  const projected3y = Math.round(investable * Math.pow(1 + 0.12 / 12, 36));
+
+  // Budget editor handlers
+  const openEditor = () => {
+    setBudgetDraft(String(budget));
+    setEditingBudget(true);
+  };
+  const saveEditor = () => {
+    const n = parseFloat(budgetDraft);
+    if (Number.isFinite(n) && n > 0) setBudget(n);
+    setEditingBudget(false);
+  };
+  const suggest = () => {
+    const sug = suggestFrom(earning);
+    setBudgetDraft(String(sug));
+  };
 
   return (
     <div className="space-y-6">
@@ -108,8 +127,8 @@ export default function Dashboard() {
           )}
           <div className="grid grid-cols-2 gap-3 mt-6 max-w-md">
             <div className="rounded-2xl bg-background/10 backdrop-blur-sm p-3">
-              <div className={`flex items-center gap-1.5 text-xs ${isNegative ? "text-white/80" : "opacity-80"}`}><ArrowDownLeft className="h-3 w-3" />Income</div>
-              <div className={`font-num font-semibold mt-1 ${isNegative ? "text-white" : ""}`}>{formatINR(income)}</div>
+              <div className={`flex items-center gap-1.5 text-xs ${isNegative ? "text-white/80" : "opacity-80"}`}><ArrowDownLeft className="h-3 w-3" />Earning</div>
+              <div className={`font-num font-semibold mt-1 ${isNegative ? "text-white" : ""}`}>{formatINR(earning)}</div>
             </div>
             <div className="rounded-2xl bg-background/10 backdrop-blur-sm p-3">
               <div className={`flex items-center gap-1.5 text-xs ${isNegative ? "text-white/80" : "opacity-80"}`}><ArrowUpRight className="h-3 w-3" />Spent</div>
@@ -132,7 +151,7 @@ export default function Dashboard() {
 
       <StreakCard streak={streak} toGoal={500} />
 
-      {/* Growth Opportunity teaser */}
+      {/* Growth Opportunity teaser — synced to Available Balance */}
       <Link
         to="/grow"
         className="block rounded-3xl p-5 border border-accent/30 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent hover:from-accent/15 transition-all group"
@@ -143,10 +162,17 @@ export default function Dashboard() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wider text-accent">Growth opportunity</div>
-            <p className="text-sm mt-1">
-              Bhai, you saved <span className="font-semibold">{formatINR(savedDisplay)}</span> this week. If you invested this in Digital Gold, it could become{" "}
-              <span className="font-semibold text-accent">{formatINR(projected3y)}</span> in 3 years.
-            </p>
+            {investable > 0 ? (
+              <p className="text-sm mt-1">
+                Bhai, tera available balance hai{" "}
+                <span className="font-semibold">{formatINR(investable)}</span>. Agar isko Digital Gold mein lagaya (12% return), toh 3 saal mein{" "}
+                <span className="font-semibold text-accent">{formatINR(projected3y)}</span> ban sakta hai. Soch le!
+              </p>
+            ) : (
+              <p className="text-sm mt-1">
+                Bhai, abhi balance zero hai — pehle thoda bachao, fir Digital Gold mein invest karte hain. 3 saal mein 12% return ka game plan ready hai.
+              </p>
+            )}
           </div>
           <span className="text-xs font-semibold text-accent shrink-0 group-hover:translate-x-0.5 transition-transform">Grow now →</span>
         </div>
@@ -154,13 +180,58 @@ export default function Dashboard() {
 
       <div className="grid md:grid-cols-3 gap-4">
         {/* Budget health ring */}
-        <div className="surface-md rounded-3xl p-5 border border-border flex flex-col items-center justify-center">
-          <div className="self-stretch flex items-baseline justify-between mb-2">
+        <div className="surface-md rounded-3xl p-5 border border-border flex flex-col">
+          <div className="flex items-baseline justify-between mb-2">
             <h3 className="font-display font-semibold">Budget health</h3>
             <span className="text-xs text-muted-foreground">This month</span>
           </div>
+
+          {/* Editable budget line */}
+          {editingBudget ? (
+            <div className="space-y-2 animate-fade-in-up">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">₹</span>
+                <Input
+                  value={budgetDraft}
+                  onChange={(e) => setBudgetDraft(e.target.value)}
+                  type="number"
+                  inputMode="decimal"
+                  className="h-9 rounded-lg flex-1 font-num"
+                  placeholder="Monthly budget"
+                  autoFocus
+                />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-success" onClick={saveEditor} aria-label="Save">
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingBudget(false)} aria-label="Cancel">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={suggest}
+                className="w-full h-8 rounded-lg text-xs gap-1.5 border-accent/40 text-accent hover:bg-accent/10"
+              >
+                <Sparkles className="h-3 w-3" /> Suggest for me (60% of earning)
+              </Button>
+            </div>
+          ) : (
+            <button
+              onClick={openEditor}
+              className="group/edit flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors mb-1"
+            >
+              <span>
+                Monthly budget:{" "}
+                <span className="font-num font-semibold text-foreground">{formatINR(budget, { compact: true })}</span>
+              </span>
+              <Pencil className="h-3 w-3 opacity-50 group-hover/edit:opacity-100" />
+            </button>
+          )}
+
           <div className="flex-1 grid place-items-center py-2">
-            <BudgetRing spent={expense} budget={MONTHLY_BUDGET} income={income} />
+            <BudgetRing spent={expense} budget={budget} />
           </div>
         </div>
 

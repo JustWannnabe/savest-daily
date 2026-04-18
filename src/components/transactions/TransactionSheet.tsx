@@ -153,12 +153,12 @@ export const TransactionSheet = ({ open, onOpenChange, editing }: Props) => {
         <SheetContent side="right" className="sm:max-w-md w-full overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{editing ? "Edit transaction" : "Add transaction"}</SheetTitle>
-            <SheetDescription>{editing ? "Update the details below." : "Log a new income or expense."}</SheetDescription>
+            <SheetDescription>{editing ? "Update the details below." : "Log a new earning or expense."}</SheetDescription>
           </SheetHeader>
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div className="grid grid-cols-2 gap-2 p-1 bg-secondary rounded-xl">
               <button type="button" onClick={() => setType("expense")} className={`h-9 rounded-lg text-sm font-medium transition-colors ${type === "expense" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Expense</button>
-              <button type="button" onClick={() => setType("income")} className={`h-9 rounded-lg text-sm font-medium transition-colors ${type === "income" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Income</button>
+              <button type="button" onClick={() => setType("income")} className={`h-9 rounded-lg text-sm font-medium transition-colors ${type === "income" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Earning</button>
             </div>
 
             <div className="space-y-1.5">
