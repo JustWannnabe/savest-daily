@@ -70,9 +70,9 @@ export function computeAlerts(txs: Transaction[]): ComputedAlert[] {
   for (const [cat, buckets] of Object.entries(weekBuckets)) {
     const thisWeek = buckets[0];
     const past = buckets.slice(1).filter((v) => v > 0);
-    if (!past.length || thisWeek < 500) continue;
+    if (!past.length || thisWeek < 300) continue;
     const avg = past.reduce((a, b) => a + b, 0) / past.length;
-    if (thisWeek > avg * 2) {
+    if (thisWeek > avg * 1.8) {
       const mult = (thisWeek / avg).toFixed(1);
       alerts.push({
         key: `spike:${cat}:${thisWeekStart.toISOString().slice(0, 10)}`,
