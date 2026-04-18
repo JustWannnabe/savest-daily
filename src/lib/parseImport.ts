@@ -43,7 +43,7 @@ const parseAmount = (raw: string): number | null => {
 const parseDate = (raw: string): string => {
   if (!raw) return new Date().toISOString();
   // Try DD/MM/YYYY or DD-MM-YYYY
-  const dmy = raw.match(/(\d{1,2})[/\\-.](\d{1,2})[/\\-.](\d{2,4})/);
+  const dmy = raw.match(/(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})/);
   if (dmy) {
     const [, d, m, y] = dmy;
     const year = y.length === 2 ? 2000 + Number(y) : Number(y);
@@ -150,7 +150,7 @@ export function extractFromOcrText(text: string): ParsedRow[] {
   }
 
   // Try to detect a date anywhere in the text
-  const dateMatch = normalized.match(/\b(\d{1,2}[/\\-.]\d{1,2}[/\\-.]\d{2,4})\b/);
+  const dateMatch = normalized.match(/\b(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})\b/);
   const occurred_at = dateMatch ? parseDate(dateMatch[1]) : new Date().toISOString();
 
   // Prefer larger / more "total"-like amounts first (cap to top 8 to keep UI tidy)
