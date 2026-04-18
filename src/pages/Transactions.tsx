@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { ImportDialog } from "@/components/transactions/ImportDialog";
-import { Plus, Search, Upload, Pencil, Trash2, ArrowUpRight, ArrowDownLeft, Repeat } from "lucide-react";
+import { Plus, Search, Upload, Pencil, Trash2, ArrowUpRight, ArrowDownLeft, Repeat, Sparkles } from "lucide-react";
 import { CATEGORIES, CATEGORY_COLORS } from "@/lib/categories";
+import { useCustomCategories } from "@/hooks/useCustomCategories";
 import { formatINR } from "@/lib/format";
 import { toast } from "sonner";
 import {
@@ -23,6 +24,7 @@ import {
 
 export default function Transactions() {
   const { data: txs = [], isLoading } = useTransactions();
+  const { customCategories, isCustom } = useCustomCategories();
   const del = useDeleteTransaction();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -110,6 +112,13 @@ export default function Transactions() {
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
               {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {customCategories.map((c) => (
+                <SelectItem key={c} value={c}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3 text-accent" /> {c}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -164,7 +173,14 @@ export default function Transactions() {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{t.merchant ?? t.category}</div>
+                          <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                            <span className="truncate">{t.merchant ?? t.category}</span>
+                            {isCustom(t.category) && (
+                              <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent/15 text-accent font-semibold inline-flex items-center gap-0.5 shrink-0">
+                                <Sparkles className="h-2.5 w-2.5" /> Custom
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {t.category}{t.note ? ` · ${t.note}` : ""}
                           </div>
