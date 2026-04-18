@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { ImportDialog } from "@/components/transactions/ImportDialog";
-import { Plus, Search, Upload, Pencil, Trash2, ArrowUpRight, ArrowDownLeft, Repeat } from "lucide-react";
+import { Plus, Search, Upload, Pencil, Trash2, ArrowUpRight, ArrowDownLeft, Repeat, Sparkles } from "lucide-react";
 import { CATEGORIES, CATEGORY_COLORS } from "@/lib/categories";
+import { useCustomCategories } from "@/hooks/useCustomCategories";
 import { formatINR } from "@/lib/format";
 import { toast } from "sonner";
 import {
