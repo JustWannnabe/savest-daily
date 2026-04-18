@@ -3,6 +3,9 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Sidebar, BottomNav } from "./Sidebar";
 import { Header } from "./Header";
+import { useSeedData } from "@/hooks/useSeedData";
+
+const SeedRunner = () => { useSeedData(); return null; };
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
@@ -19,6 +22,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="min-h-screen w-full bg-background">
+      <SeedRunner />
       <Sidebar />
       <div className="md:pl-60">
         <Header />
