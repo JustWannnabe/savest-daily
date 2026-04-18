@@ -93,24 +93,27 @@ export default function Dashboard() {
           isNegative ? "gradient-balance-negative" : "gradient-balance"
         }`}
       >
-        <div className={`absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl ${isNegative ? "bg-destructive/40" : "bg-accent/30"}`} />
+        <div className={`absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl ${isNegative ? "bg-[#FF4D4D]/30" : "bg-accent/30"}`} />
         <div className="relative">
-          <div className="text-xs font-medium uppercase tracking-wider opacity-70">Available balance · this month</div>
-          <div className="font-display font-bold text-4xl md:text-5xl mt-2 font-num">{formatINR(balance)}</div>
+          <div className={`text-xs font-medium uppercase tracking-wider ${isNegative ? "text-white/90" : "opacity-70"}`}>Available balance · this month</div>
+          <div className={`font-display font-bold text-4xl md:text-5xl mt-2 font-num ${isNegative ? "text-white" : ""}`}>{formatINR(balance)}</div>
           {isNegative && (
-            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive-foreground/15 backdrop-blur-sm text-xs font-semibold animate-fade-in-up">
+            <div
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold animate-fade-in-up text-white"
+              style={{ background: "#FF4D4D", boxShadow: "0 6px 18px -4px hsl(0 100% 60% / 0.6)" }}
+            >
               <AlertTriangle className="h-3 w-3" />
               Overspent by {formatINR(overspentBy)}
             </div>
           )}
           <div className="grid grid-cols-2 gap-3 mt-6 max-w-md">
             <div className="rounded-2xl bg-background/10 backdrop-blur-sm p-3">
-              <div className="flex items-center gap-1.5 text-xs opacity-80"><ArrowDownLeft className="h-3 w-3" />Income</div>
-              <div className="font-num font-semibold mt-1">{formatINR(income)}</div>
+              <div className={`flex items-center gap-1.5 text-xs ${isNegative ? "text-white/80" : "opacity-80"}`}><ArrowDownLeft className="h-3 w-3" />Income</div>
+              <div className={`font-num font-semibold mt-1 ${isNegative ? "text-white" : ""}`}>{formatINR(income)}</div>
             </div>
             <div className="rounded-2xl bg-background/10 backdrop-blur-sm p-3">
-              <div className="flex items-center gap-1.5 text-xs opacity-80"><ArrowUpRight className="h-3 w-3" />Spent</div>
-              <div className="font-num font-semibold mt-1">{formatINR(expense)}</div>
+              <div className={`flex items-center gap-1.5 text-xs ${isNegative ? "text-white/80" : "opacity-80"}`}><ArrowUpRight className="h-3 w-3" />Spent</div>
+              <div className={`font-num font-semibold mt-1 ${isNegative ? "text-white" : ""}`}>{formatINR(expense)}</div>
             </div>
           </div>
         </div>
