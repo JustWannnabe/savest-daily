@@ -1,43 +1,64 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createWorker } from "tesseract.js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan } from "lucide-react";
-import { useAddTransactionsBulk, type NewTransaction } from "@/hooks/useTransactions";
+import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan, Sparkles, ShieldAlert } from "lucide-react";
+import {
+  useTransactions,
+  useAddTransactionsBulk,
+  useAddTransaction,
+  type NewTransaction,
+} from "@/hooks/useTransactions";
+import { useCustomCategories } from "@/hooks/useCustomCategories";
+import { findRecentDuplicate } from "@/lib/duplicates";
 import { formatINR } from "@/lib/format";
+import { parseCsv, extractFromOcrText, type ParsedRow } from "@/lib/parseImport";
 import { toast } from "sonner";
 
-const SAMPLE: NewTransaction[] = [
-  { type: "expense", amount: 249, category: "Food & Drink", merchant: "Zomato", note: "Dinner order", occurred_at: "", is_subscription: false },
-  { type: "expense", amount: 189, category: "Transport", merchant: "Uber", note: "Cab to campus", occurred_at: "", is_subscription: false },
-  { type: "expense", amount: 1299, category: "Shopping", merchant: "Amazon", note: "Notebooks & pens", occurred_at: "", is_subscription: false },
-  { type: "expense", amount: 119, category: "Subscriptions", merchant: "Spotify", note: "Premium monthly", occurred_at: "", is_subscription: true },
-  { type: "expense", amount: 540, category: "Groceries", merchant: "BigBasket", note: "Weekly groceries", occurred_at: "", is_subscription: false },
-  { type: "expense", amount: 320, category: "Entertainment", merchant: "BookMyShow", note: "Movie ticket", occurred_at: "", is_subscription: false },
-];
-
-const STAGES = ["Reading file…", "Detecting merchants…", "Categorizing transactions…"];
-
 type Props = { open: boolean; onOpenChange: (o: boolean) => void };
+
+type ReviewRow = ParsedRow & { _checked: boolean; _duplicate?: boolean };
 
 export const ImportDialog = ({ open, onOpenChange }: Props) => {
   const [tab, setTab] = useState<"csv" | "image">("csv");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [stage, setStage] = useState<"idle" | "scanning" | "review">("idle");
-  const [stageIdx, setStageIdx] = useState(0);
-  const [rows, setRows] = useState<(NewTransaction & { _checked: boolean })[]>([]);
+  const [stageLabel, setStageLabel] = useState("Reading file…");
+  const [liveLines, setLiveLines] = useState<string[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [rows, setRows] = useState<ReviewRow[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const liveBoxRef = useRef<HTMLDivElement>(null);
+
+  const { data: existing = [] } = useTransactions();
+  const { isCustom } = useCustomCategories();
   const bulk = useAddTransactionsBulk();
+  const addOne = useAddTransaction();
 
   const reset = () => {
     setFile(null);
     setPreviewUrl(null);
     setStage("idle");
-    setStageIdx(0);
+    setStageLabel("Reading file…");
+    setLiveLines([]);
+    setProgress(0);
     setRows([]);
   };
+
+  const pushLive = (line: string) => {
+    setLiveLines((prev) => {
+      const next = [...prev, line];
+      return next.slice(-40);
+    });
+  };
+
+  // Auto-scroll live preview
+  useEffect(() => {
+    liveBoxRef.current?.scrollTo({ top: liveBoxRef.current.scrollHeight, behavior: "smooth" });
+  }, [liveLines]);
 
   const handleFile = (f: File) => {
     setFile(f);
@@ -45,39 +66,105 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
     else setPreviewUrl(null);
   };
 
-  const startScan = () => {
+  const finalizeRows = (parsed: ParsedRow[]) => {
+    if (parsed.length === 0) {
+      toast.error("No transactions detected. Try a clearer image or different file.");
+      reset();
+      return;
+    }
+    const reviewed: ReviewRow[] = parsed.map((p) => {
+      const dup = findRecentDuplicate({ amount: p.amount, category: p.category, type: p.type }, existing);
+      return { ...p, _checked: !dup, _duplicate: !!dup };
+    });
+    setRows(reviewed);
+    setStage("review");
+  };
+
+  const startScan = async () => {
     if (!file) return toast.error("Choose a file first");
     setStage("scanning");
-    setStageIdx(0);
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      if (i < STAGES.length) setStageIdx(i);
-      else {
-        clearInterval(id);
-        const now = Date.now();
-        const generated = SAMPLE.map((s, idx) => ({
-          ...s,
-          occurred_at: new Date(now - (idx + 1) * 86400000 * (1 + Math.random() * 1.5)).toISOString(),
-          _checked: true,
-        }));
-        setRows(generated);
-        setStage("review");
+    setLiveLines([]);
+    setProgress(0);
+
+    try {
+      if (tab === "csv") {
+        setStageLabel("Reading CSV…");
+        pushLive(`> Opening ${file.name}`);
+        await new Promise((r) => setTimeout(r, 250));
+        pushLive("> Detecting columns: date, amount, description…");
+        const parsed = await parseCsv(file);
+        for (const r of parsed.slice(0, 12)) {
+          pushLive(`  • ${r.merchant ?? "—"}  ₹${r.amount}  → ${r.category}`);
+          await new Promise((r) => setTimeout(r, 60));
+        }
+        pushLive(`> Parsed ${parsed.length} row${parsed.length === 1 ? "" : "s"}`);
+        await new Promise((r) => setTimeout(r, 300));
+        finalizeRows(parsed);
+      } else {
+        setStageLabel("Initializing OCR engine…");
+        pushLive("> Loading Tesseract.js (eng)…");
+        const worker = await createWorker("eng", 1, {
+          logger: (m: any) => {
+            if (m.status) {
+              setStageLabel(m.status.charAt(0).toUpperCase() + m.status.slice(1));
+              if (typeof m.progress === "number") setProgress(Math.round(m.progress * 100));
+            }
+          },
+        });
+        pushLive("> Scanning image for ₹ and Rs amounts…");
+        const { data } = await worker.recognize(file);
+        await worker.terminate();
+        const text = data.text ?? "";
+        // Stream the recognized text into the live preview
+        const tLines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+        for (const l of tLines.slice(0, 25)) {
+          pushLive(`  ${l}`);
+          await new Promise((r) => setTimeout(r, 35));
+        }
+        const parsed = extractFromOcrText(text);
+        pushLive(`> Detected ${parsed.length} potential transaction${parsed.length === 1 ? "" : "s"}`);
+        await new Promise((r) => setTimeout(r, 300));
+        finalizeRows(parsed);
       }
-    }, 850);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message ?? "Scan failed");
+      reset();
+    }
   };
 
   const importNow = async () => {
-    const selected = rows.filter((r) => r._checked).map(({ _checked, ...rest }) => rest);
+    const selected = rows.filter((r) => r._checked);
     if (!selected.length) return toast.error("Select at least one row");
-    try {
-      await bulk.mutateAsync(selected);
-      toast.success(`Imported ${selected.length} transactions`);
-      onOpenChange(false);
-      reset();
-    } catch (e: any) {
-      toast.error(e.message ?? "Import failed");
+
+    const dupes = selected.filter((r) => r._duplicate);
+    const cleanInsert = async () => {
+      const payload: NewTransaction[] = selected.map(({ _checked, _duplicate, _source, ...rest }) => rest);
+      try {
+        // If there's a single row and it's a duplicate the user explicitly toggled on,
+        // we already showed the badge — so just insert.
+        await bulk.mutateAsync(payload);
+        toast.success(`Imported ${payload.length} transaction${payload.length === 1 ? "" : "s"}`);
+        onOpenChange(false);
+        reset();
+      } catch (e: any) {
+        toast.error(e.message ?? "Import failed");
+      }
+    };
+
+    if (dupes.length > 0) {
+      // Lightweight inline confirmation via window.confirm equivalent — use toast with action
+      toast.warning(
+        `${dupes.length} possible duplicate${dupes.length === 1 ? "" : "s"} selected`,
+        {
+          description: "These match recent transactions. Import anyway?",
+          action: { label: "Import", onClick: cleanInsert },
+          duration: 8000,
+        }
+      );
+      return;
     }
+    await cleanInsert();
   };
 
   return (
@@ -92,9 +179,10 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileScan className="h-5 w-5" /> Import transactions
-            <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-secondary text-muted-foreground ml-1">Demo</span>
           </DialogTitle>
-          <DialogDescription>Upload a statement or receipt — we'll auto-extract transactions.</DialogDescription>
+          <DialogDescription>
+            Upload a CSV statement or a receipt photo — we'll extract the data with OCR.
+          </DialogDescription>
         </DialogHeader>
 
         {stage === "idle" && (
@@ -105,9 +193,15 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
             </TabsList>
             <TabsContent value="csv" className="mt-4">
               <DropZone accept=".csv,text/csv" onPick={handleFile} file={file} hint="Drop a CSV bank statement" inputRef={inputRef} />
+              <p className="text-[11px] text-muted-foreground mt-2 px-1">
+                Looks for columns like <span className="font-medium">date, amount, description, debit, credit</span>.
+              </p>
             </TabsContent>
             <TabsContent value="image" className="mt-4">
               <DropZone accept="image/*" onPick={handleFile} file={file} hint="Drop a receipt photo (JPG/PNG)" inputRef={inputRef} />
+              <p className="text-[11px] text-muted-foreground mt-2 px-1">
+                Real OCR via Tesseract.js — runs entirely in your browser.
+              </p>
             </TabsContent>
             <Button onClick={startScan} disabled={!file} className="w-full h-11 rounded-xl mt-4 font-semibold">
               Scan file
@@ -116,8 +210,8 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
         )}
 
         {stage === "scanning" && (
-          <div className="mt-2 space-y-4">
-            <div className="relative h-48 rounded-2xl overflow-hidden border border-border bg-secondary grid place-items-center">
+          <div className="mt-2 space-y-3">
+            <div className="relative h-40 rounded-2xl overflow-hidden border border-border bg-secondary grid place-items-center">
               {previewUrl ? (
                 <img src={previewUrl} alt="Receipt preview" className="h-full w-full object-cover opacity-70" />
               ) : (
@@ -128,21 +222,52 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
               )}
               <div className="absolute inset-0 scanline pointer-events-none" />
             </div>
-            <div className="flex items-center justify-center gap-2 text-sm font-medium">
-              <Loader2 className="h-4 w-4 animate-spin text-accent" />
-              <span>{STAGES[stageIdx]}</span>
+
+            {/* Live OCR / parse log */}
+            <div
+              ref={liveBoxRef}
+              className="h-40 rounded-2xl border border-border bg-background/60 backdrop-blur p-3 overflow-y-auto font-mono text-[11px] leading-relaxed text-muted-foreground"
+            >
+              {liveLines.length === 0 ? (
+                <div className="text-muted-foreground/60">Booting parser…</div>
+              ) : (
+                liveLines.map((l, i) => (
+                  <div key={i} className={l.startsWith(">") ? "text-accent" : ""}>{l}</div>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-medium">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
+                <span>{stageLabel}</span>
+              </div>
+              {progress > 0 && <span className="font-num text-muted-foreground">{progress}%</span>}
             </div>
           </div>
         )}
 
         {stage === "review" && (
           <div className="mt-2">
-            <div className="text-xs text-muted-foreground mb-2">{rows.filter((r) => r._checked).length} of {rows.length} selected</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs text-muted-foreground">
+                {rows.filter((r) => r._checked).length} of {rows.length} selected
+              </div>
+              {rows.some((r) => r._duplicate) && (
+                <div className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-warning/15 text-warning font-semibold inline-flex items-center gap-1">
+                  <ShieldAlert className="h-3 w-3" /> Duplicates flagged
+                </div>
+              )}
+            </div>
             <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
               {rows.map((r, i) => (
                 <label
                   key={i}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-secondary/60 cursor-pointer transition-colors"
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    r._duplicate
+                      ? "border-warning/40 bg-warning/5 hover:bg-warning/10"
+                      : "border-border hover:bg-secondary/60"
+                  }`}
                 >
                   <Checkbox
                     checked={r._checked}
@@ -151,8 +276,22 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
                     }
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{r.merchant}</div>
-                    <div className="text-xs text-muted-foreground">{r.category} · {new Date(r.occurred_at).toLocaleDateString("en-IN")}</div>
+                    <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                      {r.merchant ?? r.category}
+                      {isCustom(r.category) && (
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent/15 text-accent font-semibold inline-flex items-center gap-0.5">
+                          <Sparkles className="h-2.5 w-2.5" /> Custom
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <span>{r.category}</span>
+                      <span>·</span>
+                      <span>{new Date(r.occurred_at).toLocaleDateString("en-IN")}</span>
+                      {r._duplicate && (
+                        <span className="text-warning font-medium">· duplicate of recent</span>
+                      )}
+                    </div>
                   </div>
                   <div className="font-num font-semibold text-sm">{formatINR(r.amount)}</div>
                 </label>
