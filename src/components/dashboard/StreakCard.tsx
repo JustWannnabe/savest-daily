@@ -8,7 +8,7 @@ type Props = {
 };
 
 export function StreakCard({ streak, toGoal, badgeName = "Budget Ninja" }: Props) {
-  const safeStreak = Math.max(streak, 5); // demo-friendly floor so it always feels alive
+  const safeStreak = Math.max(streak, 11); // synced with header — 11-day demo streak
   return (
     <div className="rounded-3xl p-5 border border-border surface-md flex items-center gap-4 animate-fade-in-up">
       <div className="h-14 w-14 rounded-2xl grid place-items-center shrink-0 bg-gradient-to-br from-warning/20 to-destructive/20">
