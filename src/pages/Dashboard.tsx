@@ -3,7 +3,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useActiveAlerts } from "@/hooks/useAlerts";
 import { useSavingsStreak } from "@/hooks/useProfile";
 import { formatINR, formatDate } from "@/lib/format";
-import { Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TransactionSheet } from "@/components/transactions/TransactionSheet";
 import { BudgetRing } from "@/components/dashboard/BudgetRing";
@@ -66,14 +66,43 @@ export default function Dashboard() {
 
   const recent = txs.slice(0, 5);
 
+  const isNegative = balance < 0;
+  const overspentBy = isNegative ? Math.abs(balance) : 0;
+
+  // Saved this week (cap at 0 floor) — used by the Growth Opportunity card.
+  const savedThisWeek = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 86400000;
+    const recentIncome = txs
+      .filter((t) => t.type === "income" && new Date(t.occurred_at).getTime() >= weekAgo)
+      .reduce((s, t) => s + t.amount, 0);
+    const recentExpense = txs
+      .filter((t) => t.type === "expense" && new Date(t.occurred_at).getTime() >= weekAgo)
+      .reduce((s, t) => s + t.amount, 0);
+    return Math.max(0, recentIncome - recentExpense);
+  }, [txs]);
+  // Demo-friendly floor so the teaser always reads well.
+  const savedDisplay = Math.max(savedThisWeek, 500);
+  // Digital Gold projection — assume ~12% CAGR over 3 yrs, monthly compounding.
+  const projected3y = Math.round(savedDisplay * Math.pow(1 + 0.12 / 12, 36));
+
   return (
     <div className="space-y-6">
       {/* Hero balance card */}
-      <div className="rounded-3xl gradient-balance text-primary-foreground p-6 md:p-8 surface-lg overflow-hidden relative">
-        <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent/30 blur-3xl" />
+      <div
+        className={`rounded-3xl text-primary-foreground p-6 md:p-8 surface-lg overflow-hidden relative ${
+          isNegative ? "gradient-balance-negative" : "gradient-balance"
+        }`}
+      >
+        <div className={`absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl ${isNegative ? "bg-destructive/40" : "bg-accent/30"}`} />
         <div className="relative">
           <div className="text-xs font-medium uppercase tracking-wider opacity-70">Available balance · this month</div>
           <div className="font-display font-bold text-4xl md:text-5xl mt-2 font-num">{formatINR(balance)}</div>
+          {isNegative && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive-foreground/15 backdrop-blur-sm text-xs font-semibold animate-fade-in-up">
+              <AlertTriangle className="h-3 w-3" />
+              Overspent by {formatINR(overspentBy)}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 mt-6 max-w-md">
             <div className="rounded-2xl bg-background/10 backdrop-blur-sm p-3">
               <div className="flex items-center gap-1.5 text-xs opacity-80"><ArrowDownLeft className="h-3 w-3" />Income</div>
@@ -100,6 +129,26 @@ export default function Dashboard() {
 
       <StreakCard streak={streak} toGoal={500} />
 
+      {/* Growth Opportunity teaser */}
+      <Link
+        to="/grow"
+        className="block rounded-3xl p-5 border border-accent/30 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent hover:from-accent/15 transition-all group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-accent/20 grid place-items-center shrink-0">
+            <TrendingUp className="h-6 w-6 text-accent" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-wider text-accent">Growth opportunity</div>
+            <p className="text-sm mt-1">
+              Bhai, you saved <span className="font-semibold">{formatINR(savedDisplay)}</span> this week. If you invested this in Digital Gold, it could become{" "}
+              <span className="font-semibold text-accent">{formatINR(projected3y)}</span> in 3 years.
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-accent shrink-0 group-hover:translate-x-0.5 transition-transform">Grow now →</span>
+        </div>
+      </Link>
+
       <div className="grid md:grid-cols-3 gap-4">
         {/* Budget health ring */}
         <div className="surface-md rounded-3xl p-5 border border-border flex flex-col items-center justify-center">
@@ -108,7 +157,7 @@ export default function Dashboard() {
             <span className="text-xs text-muted-foreground">This month</span>
           </div>
           <div className="flex-1 grid place-items-center py-2">
-            <BudgetRing spent={expense} budget={MONTHLY_BUDGET} />
+            <BudgetRing spent={expense} budget={MONTHLY_BUDGET} income={income} />
           </div>
         </div>
 

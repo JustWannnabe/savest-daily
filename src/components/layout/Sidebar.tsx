@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, ArrowLeftRight, Bell, BarChart3, Sparkles } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Bell, BarChart3, Sparkles, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActiveAlerts } from "@/hooks/useAlerts";
 
@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { to: "/alerts", label: "Alerts", icon: Bell },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/grow", label: "Grow", icon: TrendingUp },
   { to: "/mentor", label: "AI Mentor", icon: Sparkles },
 ];
 
@@ -62,7 +63,7 @@ export const BottomNav = () => {
   const alerts = useActiveAlerts();
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 h-16 border-t border-border bg-background/95 backdrop-blur-md z-30">
-      <div className="grid grid-cols-5 h-full">
+      <div className="grid grid-cols-6 h-full">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = location.pathname === item.to;

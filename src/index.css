@@ -133,9 +133,27 @@
 
 @layer utilities {
   .surface { background-color: hsl(var(--surface-elevated)); box-shadow: var(--shadow-sm); }
-  .surface-md { background-color: hsl(var(--surface-elevated)); box-shadow: var(--shadow-md); }
+  .surface-md {
+    background-color: hsl(var(--surface-elevated) / 0.72);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+  }
   .surface-lg { background-color: hsl(var(--surface-elevated)); box-shadow: var(--shadow-lg); }
+  .glass {
+    background-color: hsl(var(--surface-elevated) / 0.55);
+    backdrop-filter: blur(8px) saturate(140%);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
+    border: 1px solid hsl(0 0% 100% / 0.2);
+  }
+  .dark .glass {
+    background-color: hsl(var(--surface-elevated) / 0.55);
+    border-color: hsl(0 0% 100% / 0.08);
+  }
   .gradient-balance { background: var(--gradient-balance); }
+  .gradient-balance-negative {
+    background: linear-gradient(135deg, hsl(0 65% 28%), hsl(0 72% 18%));
+  }
   .scanline {
     background: linear-gradient(180deg,
       transparent 0%,

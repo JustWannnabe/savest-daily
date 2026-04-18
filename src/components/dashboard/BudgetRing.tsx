@@ -4,10 +4,11 @@ import { formatINR } from "@/lib/format";
 type Props = {
   spent: number;
   budget: number;
+  income?: number; // when provided, drives "over budget" tone (spent > income → red)
   size?: number;
 };
 
-export function BudgetRing({ spent, budget, size = 140 }: Props) {
+export function BudgetRing({ spent, budget, income, size = 140 }: Props) {
   const pct = Math.min(100, budget > 0 ? (spent / budget) * 100 : 0);
   const [animPct, setAnimPct] = useState(0);
 
@@ -21,9 +22,17 @@ export function BudgetRing({ spent, budget, size = 140 }: Props) {
   const c = 2 * Math.PI * r;
   const offset = c - (animPct / 100) * c;
 
-  const tone =
-    pct < 60 ? "hsl(var(--success))" : pct < 90 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
-  const status = pct < 60 ? "On track" : pct < 90 ? "Watch it" : "Over budget";
+  // Required logic:
+  //   spent > income  → Red / Over budget
+  //   spent > 80% of budget → Amber
+  //   else → Green
+  const overIncome = typeof income === "number" && income > 0 && spent > income;
+  const tone = overIncome
+    ? "hsl(var(--destructive))"
+    : pct > 80
+    ? "hsl(var(--warning))"
+    : "hsl(var(--success))";
+  const status = overIncome ? "Over budget" : pct > 80 ? "Watch it" : "On track";
 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>

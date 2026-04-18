@@ -57,6 +57,9 @@ export function useSeedData() {
       { amount: 280, type: "expense", category: "Transport", merchant: "Uber", note: "Ride to campus", occurred_at: day(5, 8), is_subscription: false },
       { amount: 150, type: "expense", category: "Transport", merchant: "Auto", note: "Market run", occurred_at: day(11, 18), is_subscription: false },
       { amount: 1240, type: "expense", category: "Shopping", merchant: "Amazon", note: "Notebook + earphones", occurred_at: day(7, 16), is_subscription: false },
+
+      // ── The ₹10,000 Party spike (highlighted in Analytics + Top Spender) ──
+      { amount: 10000, type: "expense", category: "Entertainment", merchant: "Hostel Party", note: "Birthday bash — pizza + cake + decor", occurred_at: day(2, 22), is_subscription: false },
     ];
 
     (async () => {

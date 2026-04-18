@@ -86,6 +86,27 @@ export default function Analytics() {
         </div>
       </div>
 
+      {/* Top spender — calls out the ₹10,000 Party spike */}
+      {byCat[0] && (
+        <div className="surface-md rounded-3xl p-5 border border-destructive/25 bg-gradient-to-br from-destructive/5 to-transparent flex items-center gap-4">
+          <div
+            className="h-14 w-14 rounded-2xl grid place-items-center shrink-0"
+            style={{ background: `${CATEGORY_COLORS[byCat[0].name] ?? "hsl(var(--muted))"}25` }}
+          >
+            <span
+              className="h-6 w-6 rounded-full"
+              style={{ background: CATEGORY_COLORS[byCat[0].name] ?? "hsl(var(--muted-foreground))" }}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-wider text-destructive">Top spender</div>
+            <p className="text-sm mt-1">
+              Your biggest expense: <span className="font-semibold">{byCat[0].name}</span> ({formatINR(byCat[0].value)})
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-4">
         <div className="surface-md rounded-3xl p-5 border border-border">
           <h3 className="font-display font-semibold mb-1">Spending breakdown</h3>

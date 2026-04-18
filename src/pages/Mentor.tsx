@@ -8,9 +8,10 @@ import { formatINR } from "@/lib/format";
 type Msg = { role: "user" | "assistant"; content: string; id: string };
 
 const QUICK = [
-  { id: "save", label: "How can I save more this month?" },
-  { id: "over", label: "Where am I overspending?" },
-  { id: "5030", label: "Give me a 50/30/20 plan for ₹15,000" },
+  { id: "save", label: "Bhai, kahan se save karu?" },
+  { id: "over", label: "Kahan overspend ho raha hai?" },
+  { id: "invest", label: "Investing kab shuru karu?" },
+  { id: "5030", label: "₹15,000 ka 50/30/20 plan do" },
 ];
 
 export default function Mentor() {
@@ -20,7 +21,7 @@ export default function Mentor() {
       id: "hi",
       role: "assistant",
       content:
-        "Hey 👋 I'm your MoneyFlow mentor. I'll help you spot saving opportunities and build healthier money habits. Try a Quick Insight below to start.",
+        "Arre wah, aa gaya tu! 👋 Main tera MoneyFlow mentor — paise bachane se lekar invest karne tak, sab samjhaunga. Niche koi quick insight tap kar, shuru karte hain.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -74,23 +75,26 @@ export default function Mentor() {
   const reply = (id: string): string => {
     const { top, second, total, count, foodThisWeek, foodLastWeek, subsTotal } = insights;
     if (id === "save") {
-      if (!top) return "Once you log a few transactions, I can pinpoint exactly where to trim. Try adding 5–10 from this week.";
+      if (!top) return "Pehle thode transactions add kar de, phir batata hoon kahan se kaatna hai 💸";
       const saveTarget = Math.round(top[1] * 0.3);
-      return `Bhai, looking at your last ${count} expenses (total ${formatINR(total)}):\n\n• Your biggest leak is **${top[0]}** at ${formatINR(top[1])}.\n• Try a 14-day "no-${top[0].toLowerCase()}" challenge — even cutting 30% saves you ${formatINR(saveTarget)}.\n• ${subsTotal > 500 ? `You're paying ${formatINR(subsTotal)} on subscriptions — cancel one you didn't open this month and you've already won.` : "Set a weekly cap and you'll feel the difference by month-end."}`;
+      return `Bhai, tere last ${count} kharchon ko dekha (total ${formatINR(total)}):\n\n• Sabse bada hole hai **${top[0]}** — ${formatINR(top[1])} udd gaye 😬\n• 14 din ka "no-${top[0].toLowerCase()}" challenge le, sirf 30% kam karega toh ${formatINR(saveTarget)} bach jayega.\n• ${subsTotal > 500 ? `Subscriptions pe ${formatINR(subsTotal)} ja rahe hain — jo this month open nahi kiya, usse cancel kar de, half jung jeet li.` : "Weekly cap laga, mahine ke end mein khud farak dikhega."}`;
     }
     if (id === "over") {
       if (foodThisWeek > 0 && foodThisWeek > foodLastWeek * 1.5 && foodLastWeek > 0) {
         const mult = (foodThisWeek / foodLastWeek).toFixed(1);
-        return `Bhai, you spent **${formatINR(foodThisWeek)} on Food & Drink this week** — that's ${mult}× last week's ${formatINR(foodLastWeek)} 🍔\n\nMaybe try the mess for a few days? Even 3 mess meals = ${formatINR(450)} saved.\n\nRule of thumb: keep food delivery under ${formatINR(Math.round(foodLastWeek * 1.2))}/week and you'll free up real money for fun stuff.`;
+        return `Bhai, Zomato/Swiggy ka kharcha **${mult}x ho gaya** — is hafte ${formatINR(foodThisWeek)}, pichhle hafte sirf ${formatINR(foodLastWeek)} the 🍔\n\nThoda mess pe dhyan de — 3 mess meals = ${formatINR(450)} bach jayenge, easy.\n\nThumb rule: weekly food delivery ${formatINR(Math.round(foodLastWeek * 1.2))} ke andar rakh, fir invest karne ko bhi paise bachenge.`;
       }
-      if (!top) return "Add some transactions and I'll show you exactly where the leaks are 🚰";
+      if (!top) return "Thode transactions add kar de, phir leak exactly dikhata hoon 🚰";
       const share = total ? Math.round((top[1] / total) * 100) : 0;
-      return `Your top spend is **${top[0]}** — ${formatINR(top[1])}, which is **${share}%** of everything.${second ? `\n\nNext up: ${second[0]} at ${formatINR(second[1])}.` : ""}\n\nA healthy rule: no single non-essential category should exceed 25% of total spend. ${share > 25 ? "You're above that — worth a look." : "You're within range — nice balance!"}`;
+      return `Sabse zyada **${top[0]}** pe ja raha hai — ${formatINR(top[1])}, yaani total ka **${share}%**.${second ? `\n\nNumber 2 pe: ${second[0]} (${formatINR(second[1])}).` : ""}\n\nGolden rule: koi bhi ek non-essential category 25% se zyada nahi honi chahiye. ${share > 25 ? "Tu thoda upar hai — ek baar review kar le." : "Tu range mein hai — balance solid hai!"}`;
+    }
+    if (id === "invest") {
+      return `Bhai, invest karne ka sahi time **abhi** hai — kal nahi 📈\n\n• **₹500 SIP** start kar — ek mutual fund mein, monthly auto-debit. 10 saal mein ye choti si aadat ${formatINR(115000)}+ ban sakti hai (12% return).\n• **Digital Gold** sirf ₹10 se shuru hota hai — chai chhod, gold le.\n• Pehle ek **emergency fund** bana — 3 mahine ke kharche jitna (~${formatINR(36000)}) — phir aage badh.\n\nGrow tab khol, calculator dekh — apni aankhon se compounding ka magic dikhega ✨`;
     }
     if (id === "5030") {
-      return "Here's a clean 50/30/20 split for **₹15,000/month**:\n\n• **₹7,500 — Needs (50%)**: rent share, mess fees, transport, bills.\n• **₹4,500 — Wants (30%)**: Zomato, subscriptions, shopping, chai breaks.\n• **₹3,000 — Savings (20%)**: emergency fund first (₹15k goal), then SIPs or FDs.\n\nTip: automate the ₹3,000 transfer to savings on the 1st of each month. What you don't see, you don't spend 💸";
+      return "Le bhai, **₹15,000/month** ka clean 50/30/20 split:\n\n• **₹7,500 — Needs (50%)**: rent, mess, transport, bills.\n• **₹4,500 — Wants (30%)**: Zomato, Netflix, shopping, weekend masti.\n• **₹3,000 — Savings (20%)**: pehle emergency fund (₹15k goal), phir SIP/FD.\n\nPro tip: 1st tarikh ko hi ₹3,000 savings mein auto-transfer laga de. Jo dikhta nahi, kharch nahi hota 💸";
     }
-    return "I can answer the Quick Insights for now — full chat is coming soon!";
+    return "Abhi sirf Quick Insights ka jawab de sakta hoon — full chat jaldi aa raha hai!";
   };
 
   const send = (id: string, label: string) => {
@@ -100,7 +104,7 @@ export default function Mentor() {
     setTimeout(() => {
       setTyping(false);
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply(id) }]);
-    }, 700);
+    }, 1000);
   };
 
   const sendFree = (e: React.FormEvent) => {
@@ -114,9 +118,9 @@ export default function Mentor() {
       setTyping(false);
       setMessages((m) => [
         ...m,
-        { id: `a-${Date.now()}`, role: "assistant", content: "I can answer the Quick Insights below for now — full free-form chat is coming soon!" },
+        { id: `a-${Date.now()}`, role: "assistant", content: "Bhai, abhi ke liye Quick Insights tap kar — full free chat jaldi launch ho raha hai 🚀" },
       ]);
-    }, 700);
+    }, 1000);
   };
 
   return (
