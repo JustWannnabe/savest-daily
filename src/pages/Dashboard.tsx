@@ -98,20 +98,38 @@ export default function Dashboard() {
         </Link>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <StreakCard streak={streak} toGoal={500} />
+
+      <div className="grid md:grid-cols-3 gap-4">
+        {/* Budget health ring */}
+        <div className="surface-md rounded-3xl p-5 border border-border flex flex-col items-center justify-center">
+          <div className="self-stretch flex items-baseline justify-between mb-2">
+            <h3 className="font-display font-semibold">Budget health</h3>
+            <span className="text-xs text-muted-foreground">This month</span>
+          </div>
+          <div className="flex-1 grid place-items-center py-2">
+            <BudgetRing spent={expense} budget={MONTHLY_BUDGET} />
+          </div>
+        </div>
+
         {/* 7-day trend */}
-        <div className="surface-md rounded-3xl p-5 border border-border">
+        <div className="surface-md rounded-3xl p-5 border border-border md:col-span-2">
           <div className="flex items-baseline justify-between mb-3">
             <h3 className="font-display font-semibold">Last 7 days</h3>
             <span className="text-xs text-muted-foreground">Daily spend</span>
           </div>
           <div className="h-40">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend7} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <AreaChart data={trend7} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                 <defs>
-                  <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                  <linearGradient id="indigoFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(243 75% 59%)" stopOpacity={0.45} />
+                    <stop offset="60%" stopColor="hsl(243 75% 59%)" stopOpacity={0.12} />
+                    <stop offset="100%" stopColor="hsl(243 75% 59%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="indigoStroke" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="hsl(243 75% 59%)" />
+                    <stop offset="100%" stopColor="hsl(262 70% 60%)" />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
@@ -119,11 +137,23 @@ export default function Dashboard() {
                   contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
                   formatter={(v: number) => [formatINR(v), "Spent"]}
                 />
-                <Area type="monotone" dataKey="spent" stroke="hsl(var(--accent))" strokeWidth={2} fill="url(#g1)" />
+                <Area
+                  type="natural"
+                  dataKey="spent"
+                  stroke="url(#indigoStroke)"
+                  strokeWidth={2.5}
+                  fill="url(#indigoFill)"
+                  dot={{ r: 3, fill: "hsl(243 75% 59%)", strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: "hsl(243 75% 59%)", stroke: "hsl(var(--background))", strokeWidth: 2 }}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="hidden md:block" />
 
         {/* Category donut */}
         <div className="surface-md rounded-3xl p-5 border border-border">
