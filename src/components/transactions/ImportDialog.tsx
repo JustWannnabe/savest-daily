@@ -39,7 +39,6 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
   const { data: existing = [] } = useTransactions();
   const { isCustom } = useCustomCategories();
   const bulk = useAddTransactionsBulk();
-  const addOne = useAddTransaction();
 
   const reset = () => {
     setFile(null);
@@ -137,17 +136,19 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
   };
 
   const importNow = async () => {
-    const selected = rows.filter((r) => r._checked);
-    if (!selected.length) return toast.error("Select at least one row");
+    const selected = rows.filter((r) => r._checked && r.amount > 0);
+    if (!selected.length) return toast.error("Select at least one valid row");
 
     const dupes = selected.filter((r) => r._duplicate);
     const cleanInsert = async () => {
-      const payload: NewTransaction[] = selected.map(({ _checked, _duplicate, _source, ...rest }) => rest);
+      const payload: NewTransaction[] = selected.map(
+        ({ _checked, _duplicate, _source, ...rest }) => rest
+      );
       try {
-        // If there's a single row and it's a duplicate the user explicitly toggled on,
-        // we already showed the badge — so just insert.
         await bulk.mutateAsync(payload);
-        toast.success(`Imported ${payload.length} transaction${payload.length === 1 ? "" : "s"}`);
+        toast.success(`Imported ${payload.length} transaction${payload.length === 1 ? "" : "s"}`, {
+          description: "Now visible on Dashboard & Transactions.",
+        });
         onOpenChange(false);
         reset();
       } catch (e: any) {
@@ -156,7 +157,6 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
     };
 
     if (dupes.length > 0) {
-      // Lightweight inline confirmation via window.confirm equivalent — use toast with action
       toast.warning(
         `${dupes.length} possible duplicate${dupes.length === 1 ? "" : "s"} selected`,
         {
