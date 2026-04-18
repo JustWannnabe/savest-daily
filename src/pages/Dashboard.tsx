@@ -152,8 +152,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="hidden md:block" />
+      <div className="grid gap-4">
 
         {/* Category donut */}
         <div className="surface-md rounded-3xl p-5 border border-border">
