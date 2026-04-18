@@ -119,7 +119,7 @@ export function extractFromOcrText(text: string): ParsedRow[] {
     .filter((l) => l.length > 0);
 
   // Currency-anchored amount regex: ₹ or Rs followed by a number, OR a number with 2 decimals
-  const amountRe = /(?:₹|Rs\.?|INR)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|\\b([0-9]{2,}(?:,[0-9]{3})*(?:\.[0-9]{2}))\\b/gi;
+  const amountRe = /(?:₹|Rs\.?|INR)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|\b([0-9]{2,}(?:,[0-9]{3})*\.[0-9]{2})\b/gi;
 
   type Hit = { amount: number; merchant: string };
   const hits: Hit[] = [];
@@ -134,7 +134,7 @@ export function extractFromOcrText(text: string): ParsedRow[] {
       const amt = parseAmount(raw);
       if (!amt || amt < 5 || amt > 500000) continue;
       // Merchant guess: use a non-numeric line above (or the same line minus the amount)
-      let merchantSrc = line.replace(m[0], "").replace(/[:\\-|]+/g, " ").trim();
+      let merchantSrc = line.replace(m[0], "").replace(/[:\-|]+/g, " ").trim();
       if (merchantSrc.length < 3) {
         for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
           if (!/\d/.test(lines[j]) && lines[j].length >= 3) { merchantSrc = lines[j]; break; }
