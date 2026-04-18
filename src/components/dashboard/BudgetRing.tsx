@@ -36,7 +36,7 @@ export function BudgetRing({ spent, budget, income, size = 140 }: Props) {
 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+      <svg width={size} height={size} className={`-rotate-90 ${overIncome ? "ring-glow-danger" : ""}`}>
         <circle
           cx={size / 2}
           cy={size / 2}
