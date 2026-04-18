@@ -33,9 +33,38 @@ export default function Mentor() {
     const byCat = new Map<string, number>();
     expenses.forEach((t) => byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount));
     const sorted = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
-    const top = sorted[0];
-    const second = sorted[1];
-    return { total, top, second, count: expenses.length };
+
+    // This week vs last week food spend
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const lastWeekStart = new Date(weekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const food = expenses.filter((t) => t.category === "Food & Drink");
+    const foodThisWeek = food
+      .filter((t) => new Date(t.occurred_at) >= weekStart)
+      .reduce((s, t) => s + t.amount, 0);
+    const foodLastWeek = food
+      .filter((t) => {
+        const d = new Date(t.occurred_at);
+        return d >= lastWeekStart && d < weekStart;
+      })
+      .reduce((s, t) => s + t.amount, 0);
+
+    const subs = expenses.filter((t) => t.is_subscription);
+    const subsTotal = subs.reduce((s, t) => s + t.amount, 0);
+
+    return {
+      total,
+      top: sorted[0],
+      second: sorted[1],
+      count: expenses.length,
+      foodThisWeek,
+      foodLastWeek,
+      subsTotal,
+    };
   }, [txs]);
 
   useEffect(() => {
@@ -43,18 +72,23 @@ export default function Mentor() {
   }, [messages, typing]);
 
   const reply = (id: string): string => {
-    const { top, second, total, count } = insights;
+    const { top, second, total, count, foodThisWeek, foodLastWeek, subsTotal } = insights;
     if (id === "save") {
       if (!top) return "Once you log a few transactions, I can pinpoint exactly where to trim. Try adding 5–10 from this week.";
-      return `Looking at your last ${count} expenses (total ${formatINR(total)}):\n\n• Your biggest category is **${top[0]}** at ${formatINR(top[1])}.\n• Try a 14-day "no-${top[0].toLowerCase()}" challenge — even cutting 30% saves about ${formatINR(top[1] * 0.3)}.\n• Set a weekly cap of ${formatINR(top[1] / 4 * 0.7)} for ${top[0]} and you'll feel the difference by month-end.`;
+      const saveTarget = Math.round(top[1] * 0.3);
+      return `Bhai, looking at your last ${count} expenses (total ${formatINR(total)}):\n\n• Your biggest leak is **${top[0]}** at ${formatINR(top[1])}.\n• Try a 14-day "no-${top[0].toLowerCase()}" challenge — even cutting 30% saves you ${formatINR(saveTarget)}.\n• ${subsTotal > 500 ? `You're paying ${formatINR(subsTotal)} on subscriptions — cancel one you didn't open this month and you've already won.` : "Set a weekly cap and you'll feel the difference by month-end."}`;
     }
     if (id === "over") {
+      if (foodThisWeek > 0 && foodThisWeek > foodLastWeek * 1.5 && foodLastWeek > 0) {
+        const mult = (foodThisWeek / foodLastWeek).toFixed(1);
+        return `Bhai, you spent **${formatINR(foodThisWeek)} on Food & Drink this week** — that's ${mult}× last week's ${formatINR(foodLastWeek)} 🍔\n\nMaybe try the mess for a few days? Even 3 mess meals = ${formatINR(450)} saved.\n\nRule of thumb: keep food delivery under ${formatINR(Math.round(foodLastWeek * 1.2))}/week and you'll free up real money for fun stuff.`;
+      }
       if (!top) return "Add some transactions and I'll show you exactly where the leaks are 🚰";
       const share = total ? Math.round((top[1] / total) * 100) : 0;
-      return `Your top spend is **${top[0]}** — ${formatINR(top[1])}, which is **${share}%** of everything you've spent.${second ? `\n\nNext up: ${second[0]} at ${formatINR(second[1])}.` : ""}\n\nA healthy rule of thumb: no single non-essential category should exceed 25% of total spend. ${share > 25 ? "You're above that — worth a look." : "You're within range — nice balance!"}`;
+      return `Your top spend is **${top[0]}** — ${formatINR(top[1])}, which is **${share}%** of everything.${second ? `\n\nNext up: ${second[0]} at ${formatINR(second[1])}.` : ""}\n\nA healthy rule: no single non-essential category should exceed 25% of total spend. ${share > 25 ? "You're above that — worth a look." : "You're within range — nice balance!"}`;
     }
     if (id === "5030") {
-      return "Here's a clean 50/30/20 split for **₹15,000/month**:\n\n• **₹7,500 — Needs (50%)**: rent share, groceries, transport, bills.\n• **₹4,500 — Wants (30%)**: dining out, subscriptions, shopping, entertainment.\n• **₹3,000 — Savings (20%)**: emergency fund first (₹15k goal), then SIPs or fixed deposits.\n\nTip: automate the ₹3,000 transfer to savings on the 1st of each month. What you don't see, you don't spend 💸";
+      return "Here's a clean 50/30/20 split for **₹15,000/month**:\n\n• **₹7,500 — Needs (50%)**: rent share, mess fees, transport, bills.\n• **₹4,500 — Wants (30%)**: Zomato, subscriptions, shopping, chai breaks.\n• **₹3,000 — Savings (20%)**: emergency fund first (₹15k goal), then SIPs or FDs.\n\nTip: automate the ₹3,000 transfer to savings on the 1st of each month. What you don't see, you don't spend 💸";
     }
     return "I can answer the Quick Insights for now — full chat is coming soon!";
   };
