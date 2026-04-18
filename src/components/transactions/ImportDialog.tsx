@@ -4,7 +4,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan, Sparkles, ShieldAlert } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan, Sparkles, ShieldAlert, CheckCircle2 } from "lucide-react";
 import {
   useTransactions,
   useAddTransactionsBulk,
@@ -13,7 +15,8 @@ import {
 } from "@/hooks/useTransactions";
 import { useCustomCategories } from "@/hooks/useCustomCategories";
 import { findRecentDuplicate } from "@/lib/duplicates";
-import { formatINR } from "@/lib/format";
+import { formatINR, formatDateLong } from "@/lib/format";
+import { CATEGORIES } from "@/lib/categories";
 import { parseCsv, extractFromOcrText, type ParsedRow } from "@/lib/parseImport";
 import { toast } from "sonner";
 
