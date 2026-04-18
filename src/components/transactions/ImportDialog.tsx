@@ -3,41 +3,56 @@ import { createWorker } from "tesseract.js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UploadCloud, FileText, Image as ImageIcon, Loader2, FileScan, Sparkles, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
+import {
+  UploadCloud,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  FileScan,
+  Sparkles,
+  ShieldAlert,
+  CheckCircle2,
+  Plus,
+  Trash2,
+  Check,
+} from "lucide-react";
 import {
   useTransactions,
   useAddTransactionsBulk,
-  useAddTransaction,
   type NewTransaction,
 } from "@/hooks/useTransactions";
 import { useCustomCategories } from "@/hooks/useCustomCategories";
 import { findRecentDuplicate } from "@/lib/duplicates";
-import { formatINR, formatDateLong } from "@/lib/format";
+import { formatINR } from "@/lib/format";
 import { CATEGORIES } from "@/lib/categories";
 import { parseCsv, extractFromOcrText, type ParsedRow } from "@/lib/parseImport";
 import { toast } from "sonner";
 
 type Props = { open: boolean; onOpenChange: (o: boolean) => void };
 
-type ReviewRow = ParsedRow & { _checked: boolean; _duplicate?: boolean };
+type ReviewRow = ParsedRow & { _id: string; _duplicate?: boolean };
+
+const ADD_CUSTOM = "__add_custom__";
+const newId = () => Math.random().toString(36).slice(2, 9);
 
 export const ImportDialog = ({ open, onOpenChange }: Props) => {
   const [tab, setTab] = useState<"csv" | "image">("csv");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [stage, setStage] = useState<"idle" | "scanning" | "review">("idle");
+  const [stage, setStage] = useState<"idle" | "scanning" | "review" | "success">("idle");
   const [stageLabel, setStageLabel] = useState("Reading file…");
   const [liveLines, setLiveLines] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [rows, setRows] = useState<ReviewRow[]>([]);
+  const [customRowId, setCustomRowId] = useState<string | null>(null);
+  const [customName, setCustomName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const liveBoxRef = useRef<HTMLDivElement>(null);
 
   const { data: existing = [] } = useTransactions();
-  const { isCustom } = useCustomCategories();
+  const { customCategories, addCustom, isCustom } = useCustomCategories();
   const bulk = useAddTransactionsBulk();
 
   const reset = () => {
@@ -48,16 +63,14 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
     setLiveLines([]);
     setProgress(0);
     setRows([]);
+    setCustomRowId(null);
+    setCustomName("");
   };
 
   const pushLive = (line: string) => {
-    setLiveLines((prev) => {
-      const next = [...prev, line];
-      return next.slice(-40);
-    });
+    setLiveLines((prev) => [...prev, line].slice(-40));
   };
 
-  // Auto-scroll live preview
   useEffect(() => {
     liveBoxRef.current?.scrollTo({ top: liveBoxRef.current.scrollHeight, behavior: "smooth" });
   }, [liveLines]);
@@ -70,17 +83,31 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
 
   const finalizeRows = (parsed: ParsedRow[]) => {
     if (parsed.length === 0) {
-      toast.error("No transactions detected. Try a clearer image or different file.");
-      reset();
+      toast.error("No transactions detected — try a clearer image, or add rows manually.");
+      // Still open the review modal with one empty row so the user has full control
+      setRows([blankRow()]);
+      setStage("review");
       return;
     }
     const reviewed: ReviewRow[] = parsed.map((p) => {
       const dup = findRecentDuplicate({ amount: p.amount, category: p.category, type: p.type }, existing);
-      return { ...p, _checked: !dup, _duplicate: !!dup };
+      return { ...p, _id: newId(), _duplicate: !!dup };
     });
     setRows(reviewed);
     setStage("review");
   };
+
+  const blankRow = (): ReviewRow => ({
+    _id: newId(),
+    amount: 0,
+    type: "expense",
+    category: "Other",
+    merchant: "",
+    note: "Manually added",
+    occurred_at: new Date().toISOString(),
+    is_subscription: false,
+    _source: "ocr",
+  });
 
   const startScan = async () => {
     if (!file) return toast.error("Choose a file first");
@@ -92,15 +119,15 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
       if (tab === "csv") {
         setStageLabel("Reading CSV…");
         pushLive(`> Opening ${file.name}`);
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 200));
         pushLive("> Detecting columns: date, amount, description…");
         const parsed = await parseCsv(file);
         for (const r of parsed.slice(0, 12)) {
           pushLive(`  • ${r.merchant ?? "—"}  ₹${r.amount}  → ${r.category}`);
-          await new Promise((r) => setTimeout(r, 60));
+          await new Promise((r) => setTimeout(r, 50));
         }
         pushLive(`> Parsed ${parsed.length} row${parsed.length === 1 ? "" : "s"}`);
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 250));
         finalizeRows(parsed);
       } else {
         setStageLabel("Initializing OCR engine…");
@@ -113,19 +140,18 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
             }
           },
         });
-        pushLive("> Scanning image for ₹ and Rs amounts…");
+        pushLive("> Deep-scanning every line for ₹ and decimals…");
         const { data } = await worker.recognize(file);
         await worker.terminate();
         const text = data.text ?? "";
-        // Stream the recognized text into the live preview
         const tLines = text.split("\n").map((l) => l.trim()).filter(Boolean);
         for (const l of tLines.slice(0, 25)) {
           pushLive(`  ${l}`);
-          await new Promise((r) => setTimeout(r, 35));
+          await new Promise((r) => setTimeout(r, 30));
         }
         const parsed = extractFromOcrText(text);
-        pushLive(`> Detected ${parsed.length} potential transaction${parsed.length === 1 ? "" : "s"}`);
-        await new Promise((r) => setTimeout(r, 300));
+        pushLive(`> Detected ${parsed.length} potential line item${parsed.length === 1 ? "" : "s"}`);
+        await new Promise((r) => setTimeout(r, 250));
         finalizeRows(parsed);
       }
     } catch (e: any) {
@@ -135,22 +161,48 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
     }
   };
 
-  const importNow = async () => {
-    const selected = rows.filter((r) => r._checked && r.amount > 0);
-    if (!selected.length) return toast.error("Select at least one valid row");
+  const updateRow = (id: string, patch: Partial<ReviewRow>) => {
+    setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
+  };
+  const deleteRow = (id: string) => setRows((prev) => prev.filter((r) => r._id !== id));
+  const addBlankRow = () => setRows((prev) => [...prev, blankRow()]);
 
-    const dupes = selected.filter((r) => r._duplicate);
+  const handleCategoryChange = (id: string, v: string) => {
+    if (v === ADD_CUSTOM) {
+      setCustomRowId(id);
+      setCustomName("");
+      return;
+    }
+    updateRow(id, { category: v });
+  };
+
+  const commitCustom = () => {
+    if (!customRowId) return;
+    const saved = addCustom(customName);
+    if (!saved) return toast.error("Enter a category name");
+    updateRow(customRowId, { category: saved });
+    setCustomRowId(null);
+    setCustomName("");
+  };
+
+  const validRows = rows.filter((r) => r.amount > 0 && (r.merchant ?? "").length > 0);
+
+  const importNow = async () => {
+    if (!validRows.length) return toast.error("Each row needs a merchant and amount");
+
+    const dupes = validRows.filter((r) => r._duplicate);
     const cleanInsert = async () => {
-      const payload: NewTransaction[] = selected.map(
-        ({ _checked, _duplicate, _source, ...rest }) => rest
+      const payload: NewTransaction[] = validRows.map(
+        ({ _id, _duplicate, _source, ...rest }) => rest
       );
       try {
         await bulk.mutateAsync(payload);
-        toast.success(`Imported ${payload.length} transaction${payload.length === 1 ? "" : "s"}`, {
-          description: "Now visible on Dashboard & Transactions.",
-        });
-        onOpenChange(false);
-        reset();
+        setStage("success");
+        // Auto-close after the success animation
+        setTimeout(() => {
+          onOpenChange(false);
+          reset();
+        }, 1400);
       } catch (e: any) {
         toast.error(e.message ?? "Import failed");
       }
@@ -158,10 +210,10 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
 
     if (dupes.length > 0) {
       toast.warning(
-        `${dupes.length} possible duplicate${dupes.length === 1 ? "" : "s"} selected`,
+        `${dupes.length} possible duplicate${dupes.length === 1 ? "" : "s"} detected`,
         {
           description: "These match recent transactions. Import anyway?",
-          action: { label: "Import", onClick: cleanInsert },
+          action: { label: "Import all", onClick: cleanInsert },
           duration: 8000,
         }
       );
@@ -178,13 +230,20 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
         if (!o) reset();
       }}
     >
-      <DialogContent className="max-w-lg rounded-3xl">
+      <DialogContent
+        className={`rounded-3xl border border-white/15 bg-background/70 backdrop-blur-xl shadow-2xl ${
+          stage === "review" ? "max-w-2xl" : "max-w-lg"
+        }`}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileScan className="h-5 w-5" /> Import transactions
+            <FileScan className="h-5 w-5" />
+            {stage === "review" ? "Review your transactions" : "Import transactions"}
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV statement or a receipt photo — we'll extract the data with OCR.
+            {stage === "review"
+              ? "Edit anything before committing. Nothing is saved until you confirm."
+              : "Upload a CSV statement or a receipt photo — we'll extract the data with OCR."}
           </DialogDescription>
         </DialogHeader>
 
@@ -226,7 +285,6 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
               <div className="absolute inset-0 scanline pointer-events-none" />
             </div>
 
-            {/* Live OCR / parse log */}
             <div
               ref={liveBoxRef}
               className="h-40 rounded-2xl border border-border bg-background/60 backdrop-blur p-3 overflow-y-auto font-mono text-[11px] leading-relaxed text-muted-foreground"
@@ -251,11 +309,11 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
         )}
 
         {stage === "review" && (
-          <div className="mt-2">
-            <div className="flex items-center justify-between mb-2">
+          <div className="mt-2 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                Review {rows.length} detected · {rows.filter((r) => r._checked).length} selected
+                {rows.length} row{rows.length === 1 ? "" : "s"} · {validRows.length} valid
               </div>
               {rows.some((r) => r._duplicate) && (
                 <div className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-warning/15 text-warning font-semibold inline-flex items-center gap-1">
@@ -264,24 +322,27 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
               )}
             </div>
 
-            {/* Review table — verify amount + category before committing */}
-            <div className="max-h-80 overflow-y-auto rounded-2xl border border-border divide-y divide-border">
-              {rows.map((r, i) => (
+            <div className="max-h-[55vh] overflow-y-auto rounded-2xl border border-white/10 bg-card/40 backdrop-blur-md divide-y divide-border">
+              {rows.length === 0 && (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  No rows yet. Use “Add item” below to enter one manually.
+                </div>
+              )}
+              {rows.map((r) => (
                 <div
-                  key={i}
-                  className={`grid grid-cols-[auto_1fr_auto] gap-2 items-center p-3 transition-colors ${
+                  key={r._id}
+                  className={`grid grid-cols-[1fr_auto] gap-3 p-3 transition-colors ${
                     r._duplicate ? "bg-warning/5" : ""
-                  } ${!r._checked ? "opacity-50" : ""}`}
+                  }`}
                 >
-                  <Checkbox
-                    checked={r._checked}
-                    onCheckedChange={(v) =>
-                      setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, _checked: !!v } : row)))
-                    }
-                  />
-                  <div className="min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-sm font-medium truncate">
-                      <span className="truncate">{r.merchant ?? "Unknown"}</span>
+                  <div className="space-y-2 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={r.merchant ?? ""}
+                        onChange={(e) => updateRow(r._id, { merchant: e.target.value })}
+                        placeholder="Merchant"
+                        className="h-9 rounded-lg text-sm font-medium flex-1 min-w-0"
+                      />
                       {isCustom(r.category) && (
                         <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-accent/15 text-accent font-semibold inline-flex items-center gap-0.5 shrink-0">
                           <Sparkles className="h-2.5 w-2.5" /> Custom
@@ -289,59 +350,127 @@ export const ImportDialog = ({ open, onOpenChange }: Props) => {
                       )}
                       {r._duplicate && (
                         <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-warning/15 text-warning font-semibold shrink-0">
-                          Duplicate
+                          Dupe
                         </span>
                       )}
                     </div>
+
                     <div className="flex gap-1.5">
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        value={r.amount}
-                        onChange={(e) =>
-                          setRows((prev) =>
-                            prev.map((row, idx) =>
-                              idx === i ? { ...row, amount: parseFloat(e.target.value) || 0 } : row
-                            )
-                          )
-                        }
-                        className="h-8 rounded-lg text-xs font-num w-24"
-                      />
-                      <Select
-                        value={r.category}
-                        onValueChange={(v) =>
-                          setRows((prev) => prev.map((row, idx) => (idx === i ? { ...row, category: v } : row)))
-                        }
-                      >
-                        <SelectTrigger className="h-8 rounded-lg text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground font-num">
-                      {formatDateLong(r.occurred_at)} · via {r._source.toUpperCase()}
+                      <div className="relative w-28 shrink-0">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-num">₹</span>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          value={r.amount || ""}
+                          onChange={(e) => updateRow(r._id, { amount: parseFloat(e.target.value) || 0 })}
+                          className="h-9 rounded-lg text-sm font-num pl-5"
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      {customRowId === r._id ? (
+                        <div className="flex gap-1 flex-1 min-w-0">
+                          <Input
+                            autoFocus
+                            value={customName}
+                            onChange={(e) => setCustomName(e.target.value)}
+                            placeholder="New category…"
+                            className="h-9 rounded-lg text-xs flex-1 min-w-0"
+                          />
+                          <Button type="button" size="sm" onClick={commitCustom} className="h-9 rounded-lg px-2">
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setCustomRowId(null); setCustomName(""); }}
+                            className="h-9 rounded-lg px-2"
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <Select value={r.category} onValueChange={(v) => handleCategoryChange(r._id, v)}>
+                          <SelectTrigger className="h-9 rounded-lg text-xs flex-1 min-w-0"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {CATEGORIES.filter((c) => c !== "Income").map((c) => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                            {customCategories.length > 0 && <SelectSeparator />}
+                            {customCategories.map((c) => (
+                              <SelectItem key={c} value={c}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Sparkles className="h-3 w-3 text-accent" /> {c}
+                                </span>
+                              </SelectItem>
+                            ))}
+                            <SelectSeparator />
+                            <SelectItem value={ADD_CUSTOM} className="text-accent font-medium">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Plus className="h-3.5 w-3.5" /> Add custom category
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   </div>
-                  <div className="font-num font-semibold text-sm text-right shrink-0">
-                    {formatINR(r.amount)}
+
+                  <div className="flex flex-col items-end justify-between gap-2 shrink-0">
+                    <div className="font-num font-semibold text-sm text-right">
+                      {formatINR(r.amount || 0)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteRow(r._id)}
+                      className="h-8 w-8 grid place-items-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      aria-label="Delete row"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addBlankRow}
+              className="w-full mt-3 h-10 rounded-xl border-dashed font-medium"
+            >
+              <Plus className="h-4 w-4" /> Add item
+            </Button>
+
             <div className="flex gap-2 mt-4">
               <Button variant="outline" onClick={reset} className="flex-1 rounded-xl">Cancel</Button>
               <Button
                 onClick={importNow}
-                disabled={bulk.isPending || rows.filter((r) => r._checked).length === 0}
+                disabled={bulk.isPending || validRows.length === 0}
                 className="flex-1 rounded-xl font-semibold"
               >
                 {bulk.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirm import ({rows.filter((r) => r._checked).length})
+                Confirm & Import all ({validRows.length})
               </Button>
+            </div>
+          </div>
+        )}
+
+        {stage === "success" && (
+          <div className="py-10 flex flex-col items-center justify-center gap-4 animate-fade-in-up">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-success/30 blur-2xl animate-pulse" />
+              <div className="relative h-20 w-20 rounded-full bg-success/15 border-2 border-success grid place-items-center">
+                <Check className="h-10 w-10 text-success animate-scale-in" strokeWidth={3} />
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-display font-semibold">Imported successfully</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {validRows.length} transaction{validRows.length === 1 ? "" : "s"} added · check your Dashboard
+              </div>
             </div>
           </div>
         )}
