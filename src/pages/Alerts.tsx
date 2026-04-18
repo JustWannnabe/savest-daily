@@ -72,6 +72,7 @@ export default function Alerts() {
                   {a.txId && (
                     <Link
                       to="/transactions"
+                      state={{ highlightTxId: a.txId }}
                       className="text-xs font-medium px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/70 transition-colors"
                     >
                       View transaction

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useTransactions, useDeleteTransaction, type Transaction } from "@/hooks/useTransactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,26 @@ export default function Transactions() {
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<string>("all");
   const [type, setType] = useState<string>("all");
+
+  // Highlight a specific transaction when navigated from an Alert.
+  const location = useLocation();
+  const highlightTxId = (location.state as { highlightTxId?: string } | null)?.highlightTxId;
+  const [activeHighlight, setActiveHighlight] = useState<string | null>(highlightTxId ?? null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!highlightTxId) return;
+    setActiveHighlight(highlightTxId);
+    // wait one frame so the row is in the DOM
+    const t = setTimeout(() => {
+      highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    const fade = setTimeout(() => setActiveHighlight(null), 3200);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(fade);
+    };
+  }, [highlightTxId]);
 
   const filtered = useMemo(() => {
     return txs.filter((t) => {
@@ -123,36 +144,45 @@ export default function Transactions() {
                   <span className="text-xs text-muted-foreground font-num">{formatINR(dayTotal, { compact: true })} spent</span>
                 </div>
                 <div className="surface rounded-2xl border border-border overflow-hidden">
-                  {items.map((t, idx) => (
-                    <div key={t.id} className={`flex items-center gap-3 px-4 py-3 group ${idx > 0 ? "border-t border-border" : ""}`}>
-                      <div className="h-10 w-10 rounded-full grid place-items-center shrink-0" style={{ background: `${CATEGORY_COLORS[t.category] ?? "hsl(var(--muted))"}20` }}>
-                        {t.type === "income" ? (
-                          <ArrowDownLeft className="h-4 w-4 text-success" />
-                        ) : t.is_subscription ? (
-                          <Repeat className="h-4 w-4" style={{ color: CATEGORY_COLORS[t.category] }} />
-                        ) : (
-                          <ArrowUpRight className="h-4 w-4" style={{ color: CATEGORY_COLORS[t.category] ?? "hsl(var(--muted-foreground))" }} />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{t.merchant ?? t.category}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {t.category}{t.note ? ` · ${t.note}` : ""}
+                  {items.map((t, idx) => {
+                    const isHL = activeHighlight === t.id;
+                    return (
+                      <div
+                        key={t.id}
+                        ref={isHL ? highlightRef : undefined}
+                        className={`flex items-center gap-3 px-4 py-3 group transition-colors ${
+                          idx > 0 ? "border-t border-border" : ""
+                        } ${isHL ? "bg-warning/10 ring-1 ring-warning/40" : ""}`}
+                      >
+                        <div className="h-10 w-10 rounded-full grid place-items-center shrink-0" style={{ background: `${CATEGORY_COLORS[t.category] ?? "hsl(var(--muted))"}20` }}>
+                          {t.type === "income" ? (
+                            <ArrowDownLeft className="h-4 w-4 text-success" />
+                          ) : t.is_subscription ? (
+                            <Repeat className="h-4 w-4" style={{ color: CATEGORY_COLORS[t.category] }} />
+                          ) : (
+                            <ArrowUpRight className="h-4 w-4" style={{ color: CATEGORY_COLORS[t.category] ?? "hsl(var(--muted-foreground))" }} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{t.merchant ?? t.category}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {t.category}{t.note ? ` · ${t.note}` : ""}
+                          </div>
+                        </div>
+                        <div className={`font-num font-semibold text-sm shrink-0 ${t.type === "income" ? "text-success" : ""}`}>
+                          {t.type === "income" ? "+" : "−"}{formatINR(t.amount)}
+                        </div>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(t); setSheetOpen(true); }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDel(t.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
-                      <div className={`font-num font-semibold text-sm shrink-0 ${t.type === "income" ? "text-success" : ""}`}>
-                        {t.type === "income" ? "+" : "−"}{formatINR(t.amount)}
-                      </div>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditing(t); setSheetOpen(true); }}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setConfirmDel(t.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );
